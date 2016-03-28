@@ -1,10 +1,10 @@
 package main
 
 import (
-    "fmt"
+	"fmt"
 	"github.com/conformal/gotk3/cairo"
-	"github.com/conformal/gotk3/gtk"
 	"github.com/conformal/gotk3/gdk"
+	"github.com/conformal/gotk3/gtk"
 	"math"
 	"time"
 )
@@ -52,15 +52,15 @@ func main() {
 		wx := float64(da.GetAllocatedWidth())
 		wy := float64(da.GetAllocatedHeight())
 		i := basecolor
-		diam := radius*2
-	    for y := step/2; y < wy - step/2; y += step {
-		    for x := step/2; x < wx - step/2; x += step {
-			    i += 0.00001
-			    red := (1. + math.Sin(i)) * 0.5
+		diam := radius * 2
+		for y := step / 2; y < wy-step/2; y += step {
+			for x := step / 2; x < wx-step/2; x += step {
+				i += 0.00001
+				red := (1. + math.Sin(i)) * 0.5
 				grn := (1. + math.Sin(i*1.2)) * 0.5
 				blu := (1. + math.Sin(i*1.7)) * 0.5
 				cr.SetSourceRGB(red, grn, blu)
-			    cr.Rectangle(x-radius, y-radius, diam, diam)
+				cr.Rectangle(x-radius, y-radius, diam, diam)
 				// cr.Arc(x, y, radius, 0., math.Pi*2)
 				cr.Fill()
 			}
@@ -70,7 +70,7 @@ func main() {
 
 	// any key press lead to exit
 	win.Connect("key-press-event", func(win *gtk.Window, ev *gdk.Event) {
-	    gtk.MainQuit()
+		gtk.MainQuit()
 	})
 
 	gtk.Main()
