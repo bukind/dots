@@ -23,7 +23,7 @@ func main() {
 	win.Add(da)
 	win.ShowAll()
 
-	interval := time.Second/2
+	interval := time.Second
 
 	timer := time.NewTimer(interval)
 	done := make(chan bool)
