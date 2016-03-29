@@ -12,10 +12,10 @@ import (
 
 const minsize = 5
 const maxsize = 20
-const maxspeed = 5
+const maxspeed = 10
 const maxfps = 20
 const nsprites = 8
-const maxforce = 1
+const maxforce = 5
 
 type Sprite struct {
 	surface *cairo.Surface
@@ -130,21 +130,18 @@ func UpdateForces(sprites []*Sprite, matrix [][]float64) {
 	}
 }
 
-func makeSprites(wx, wy, amount int) []*Sprite {
-	res := make([]*Sprite, amount)
-	for i := 0; i < amount; i++ {
-		res[i] = NewSprite(wx, wy, minsize, maxsize)
+func makeSprites(sprites []*Sprite, wx, wy int) {
+	for i := 0; i < len(sprites); i++ {
+		sprites[i] = NewSprite(wx, wy, minsize, maxsize)
 	}
-	return res
 }
 
-func makeFeeling(sprites []*Sprite) [][]float64 {
-	matrix := make([][]float64, len(sprites))
-	for i := 0; i < len(sprites); i++ {
-		matrix[i] = make([]float64, len(sprites))
+func makeFeeling(matrix [][]float64) {
+	for i := 0; i < len(matrix); i++ {
+		matrix[i] = make([]float64, len(matrix))
 	}
-	for i := 0; i < len(sprites); i++ {
-		for j := 0; j < len(sprites); j++ {
+	for i := 0; i < len(matrix); i++ {
+		for j := 0; j < len(matrix); j++ {
 			if i == j {
 				matrix[i][j] = 0
 			} else {
@@ -154,7 +151,6 @@ func makeFeeling(sprites []*Sprite) [][]float64 {
 			}
 		}
 	}
-	return matrix
 }
 
 func main() {
@@ -163,31 +159,34 @@ func main() {
 	win, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
 	win.SetTitle("dots")
 	win.Connect("destroy", gtk.MainQuit)
-	win.SetSizeRequest(400, 400)
-	// win.Fullscreen()
+	// win.SetSizeRequest(400, 400)
+	win.Fullscreen()
 	win.SetResizable(false)
 
 	da, _ := gtk.DrawingAreaNew()
 	win.Add(da)
 	win.ShowAll()
 
-	// interval := time.Second / maxfps
-
 	done := make(chan bool)
 	defer close(done)
 
-	wx := da.GetAllocatedWidth()
-	wy := da.GetAllocatedHeight()
-	fmt.Println(wx, wy)
+	sprites := make([]*Sprite, nsprites)
+	matrix := make([][]float64, nsprites)
+	var fwx, fwy float64
 
-	fwx := float64(wx)
-	fwy := float64(wy)
-	sprites := makeSprites(wx, wy, nsprites)
 	now := time.Now()
 
-	matrix := makeFeeling(sprites)
-
 	// Event handlers
+	da.Connect("configure-event", func(da *gtk.DrawingArea, ev *gdk.Event) {
+		// setup everything
+		wx := da.GetAllocatedWidth()
+		wy := da.GetAllocatedHeight()
+		fwx = float64(wx)
+		fwy = float64(wy)
+		makeSprites(sprites, wx, wy)
+		makeFeeling(matrix)
+	})
+
 	da.Connect("draw", func(da *gtk.DrawingArea, cr *cairo.Context) {
 
 		prevtime := now
