@@ -45,12 +45,16 @@ func main() {
 		}
 	}()
 
+	da.Connect("configure-event", func(da *gtk.DrawingArea, ev *gdk.Event) {
+		fmt.Println("configure", da.GetAllocatedWidth(), da.GetAllocatedHeight())
+	})
+
 	// Event handlers
 	da.Connect("draw", func(da *gtk.DrawingArea, cr *cairo.Context) {
 		cr.SetSourceRGB(0, 0, 0)
 		wx := float64(da.GetAllocatedWidth())
 		wy := float64(da.GetAllocatedHeight())
-		fmt.Println("wx=", wx, ", wy=", wy, ", count=", count)
+		fmt.Println("draw wx=", wx, ", wy=", wy, ", count=", count)
 		x0 := wx / 2
 		y0 := wy / 2
 		w := math.Min(x0, y0) * 0.9
