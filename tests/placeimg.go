@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/conformal/gotk3/cairo"
 	"github.com/conformal/gotk3/gdk"
@@ -10,12 +11,14 @@ import (
 	"time"
 )
 
-const minsize = 5
-const maxsize = 20
-const maxspeed = 10
-const maxfps = 20
-const nsprites = 8
-const maxforce = 5
+var minsize int = 5
+var maxsize int = 20
+var maxfps int64 = 20
+var nsprites int = 50
+var maxspeed float64 = 10.0
+var minforce float64 = 0.1
+var maxforce float64 = 0.5
+var fullscreen bool = false
 
 type Sprite struct {
 	surface *cairo.Surface
@@ -105,7 +108,7 @@ func UpdateForces(sprites []*Sprite, matrix [][]float64) {
 			// f = k*(r-1) + k, r < 1
 			//
 			// fx := f * rx / R
-			kf := matrix[i][j]
+			kf := matrix[i][j] * v.mass * s.mass
 			r0 := v.rad + s.rad
 			rbig := math.Hypot(s.x-v.x, s.y-v.y)
 			r := rbig / r0
@@ -145,7 +148,10 @@ func makeFeeling(matrix [][]float64) {
 			if i == j {
 				matrix[i][j] = 0
 			} else {
-				f := (rand.Float64() - 0.5) * 2 * maxforce
+				f := rand.Float64()*(maxforce-minforce) + maxforce
+				if rand.Intn(2) > 0 {
+					f = -f
+				}
 				matrix[i][j] = f
 				matrix[j][i] = f
 			}
@@ -154,13 +160,36 @@ func makeFeeling(matrix [][]float64) {
 }
 
 func main() {
+
+	// options
+	flag.IntVar(&nsprites, "nsprites", 10, "Set the number of sprites")
+	flag.IntVar(&minsize, "minsize", 5, "Set the minsize")
+	flag.IntVar(&maxsize, "maxsize", 40, "Set the maxsize")
+	flag.Int64Var(&maxfps, "maxfps", 20, "Set the maximum fps")
+	flag.Float64Var(&maxspeed, "maxspeed", 10., "Set the maxspeed")
+	flag.Float64Var(&minforce, "minforce", 0., "Set the minforce")
+	flag.Float64Var(&maxforce, "maxforce", 3., "Set the maxforce")
+	flag.BoolVar(&fullscreen, "fullscreen", false, "Allow to run fullscreen")
+
+	flag.Parse()
+
+	// check flags
+	if nsprites < 1 || minsize < 1 || minsize >= maxsize ||
+		maxfps < 1 || maxfps > 100 || maxspeed < 0.1 || maxforce < 0 ||
+		minforce >= maxforce {
+		panic("bad nsprites")
+	}
+
 	gtk.Init(nil)
 
 	win, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
 	win.SetTitle("dots")
 	win.Connect("destroy", gtk.MainQuit)
-	// win.SetSizeRequest(400, 400)
-	win.Fullscreen()
+	if fullscreen {
+		win.Fullscreen()
+	} else {
+		win.SetSizeRequest(400, 400)
+	}
 	win.SetResizable(false)
 
 	da, _ := gtk.DrawingAreaNew()
@@ -175,6 +204,7 @@ func main() {
 	var fwx, fwy float64
 
 	now := time.Now()
+	prevstat := now
 
 	// Event handlers
 	da.Connect("configure-event", func(da *gtk.DrawingArea, ev *gdk.Event) {
@@ -204,11 +234,13 @@ func main() {
 			cr.SetSourceSurface(sprites[i].surface, sprites[i].x, sprites[i].y)
 			cr.Paint()
 		}
-		fmt.Println("pass dt=", dt, ", perf=", time.Now().Sub(now), ", maxv=", maxv)
+		if now.Sub(prevstat) > time.Minute {
+			fmt.Println("pass dt=", dt, ", perf=", time.Now().Sub(now), ", maxv=", maxv)
+		}
 
 		// restart the drawing
 		go func() {
-			interval := time.Second / maxfps
+			interval := time.Duration(int64(time.Second) / maxfps)
 			timer := time.NewTimer(interval)
 			select {
 			case <-done:
