@@ -12,10 +12,10 @@ import (
 
 const minsize = 5
 const maxsize = 20
-const maxspeed = 0.2
+const maxspeed = 5
 const maxfps = 20
 const nsprites = 8
-const maxforce = 0.1
+const maxforce = 1
 
 type Sprite struct {
 	surface *cairo.Surface
@@ -171,9 +171,8 @@ func main() {
 	win.Add(da)
 	win.ShowAll()
 
-	interval := time.Second / maxfps
+	// interval := time.Second / maxfps
 
-	timer := time.NewTimer(interval)
 	done := make(chan bool)
 	defer close(done)
 
@@ -188,23 +187,11 @@ func main() {
 
 	matrix := makeFeeling(sprites)
 
-	go func() {
-		for {
-			select {
-			case <-timer.C:
-				win.QueueDraw()
-				timer.Reset(interval)
-			case <-done:
-				break
-			}
-		}
-	}()
-
 	// Event handlers
 	da.Connect("draw", func(da *gtk.DrawingArea, cr *cairo.Context) {
 
 		prevtime := now
-		now := time.Now()
+		now = time.Now()
 		dt := now.Sub(prevtime).Seconds()
 
 		UpdateForces(sprites, matrix)
@@ -219,6 +206,18 @@ func main() {
 			cr.Paint()
 		}
 		fmt.Println("pass dt=", dt, ", perf=", time.Now().Sub(now), ", maxv=", maxv)
+
+		// restart the drawing
+		go func() {
+			interval := time.Second / maxfps
+			timer := time.NewTimer(interval)
+			select {
+			case <-done:
+				break
+			case <-timer.C:
+				win.QueueDraw()
+			}
+		}()
 	})
 
 	// any key press lead to exit
