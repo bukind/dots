@@ -7,6 +7,7 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"math"
+	"math/cmplx"
 	"math/rand"
 	"time"
 )
@@ -20,22 +21,43 @@ var minforce float64 = 0.1
 var maxforce float64 = 0.5
 var fullscreen bool = false
 
+type Vector complex128
+
+func mkVec(r, i float64) Vector {
+	return Vector(complex(r, i))
+}
+
+func vx(v Vector) float64 {
+	return real(v)
+}
+
+func vy(v Vector) float64 {
+	return imag(v)
+}
+
+func VAbs(v Vector) float64 {
+	return cmplx.Abs(complex128(v))
+}
+
+func VScale(v Vector, scale float64) Vector {
+	return mkVec(real(v)*scale, imag(v)*scale)
+}
+
+func mkRand(min, max float64) float64 {
+	return min + rand.Float64()*(max-min)
+}
+
 type Sprite struct {
-	surface *cairo.Surface
-	wx      float64
-	wy      float64
-	x       float64
-	y       float64
-	vx      float64
-	vy      float64
-	rad     float64
-	fx      float64 // fx
-	fy      float64 // fy
-	mass    float64
+	surface  *cairo.Surface
+	position Vector
+	speed    Vector
+	force    Vector
+	radius   float64
+	mass     float64
 }
 
 func (v *Sprite) Speed() float64 {
-	return math.Hypot(v.vx, v.vy)
+	return VAbs(v.speed)
 }
 
 type SpriteMetric struct {
@@ -66,16 +88,25 @@ func GetMax(v *SpriteMetric, sprites []*Sprite) {
 func ScaleEnergy(sprites []*Sprite, scale float64) {
 	ratio := math.Sqrt(scale)
 	for _, s := range sprites {
-		s.vx *= ratio
-		s.vy *= ratio
+		s.speed = VScale(s.speed, ratio)
 	}
 }
 
-func NewSprite(wx, wy, minsize, maxsize int) *Sprite {
+func NewSprite(maxx, maxy, minsize, maxsize int) *Sprite {
 	res := new(Sprite)
 	iwx := rand.Intn(maxsize-minsize+1) + minsize
 	iwy := iwx
-	res.surface = cairo.ImageSurfaceCreate(cairo.FORMAT_RGB24, iwx, iwy)
+	res.radius = float64(iwx) / 1.2
+
+	if res.radius >= float64(maxx/2) || res.radius >= float64(maxy/2) {
+		panic("Too small drawing area")
+	}
+
+	var err error
+	res.surface, err = cairo.NewSurfaceImage(cairo.FORMAT_RGB24, iwx, iwy)
+	if err != nil {
+		panic(err)
+	}
 
 	red := rand.Float64()
 	green := rand.Float64()
@@ -84,52 +115,45 @@ func NewSprite(wx, wy, minsize, maxsize int) *Sprite {
 	c.SetSourceRGB(red, green, blue)
 	c.Paint()
 
-	res.wx = float64(iwx)
-	res.wy = float64(iwy)
-	res.vx = maxspeed * 2 * (rand.Float64() - 0.5)
-	res.vy = maxspeed * 2 * (rand.Float64() - 0.5)
-	res.x = rand.Float64() * float64(wx-iwx)
-	res.y = rand.Float64() * float64(wy-iwy)
-	res.rad = res.wx + res.wy
-	res.mass = res.wx * res.wy
+	res.speed = mkVec(mkRand(-maxspeed, maxspeed), mkRand(-maxspeed, maxspeed))
+	res.position = mkVec(mkRand(res.radius, float64(maxx)-res.radius),
+		mkRand(res.radius, float64(maxy)-res.radius))
+	res.mass = res.radius * res.radius
 	return res
 }
 
-func (v *Sprite) UpdatePosition(wx, wy, dt float64) {
-	v.vx += v.fx / v.mass * dt
-	v.vy += v.fy / v.mass * dt
-	v.x += v.vx * dt
-	v.y += v.vy * dt
-	mx := wx - v.wx
-	if v.x < 0 {
-		v.x = -v.x
-		if v.vx < 0 {
-			v.vx = -v.vx
+func (v *Sprite) UpdatePosition(maxx, maxy, dt float64) {
+	v.speed += VScale(v.force, dt/v.mass)
+	v.position += VScale(v.speed, dt)
+	mx := maxx - v.radius
+	if vx(v.position) < v.radius {
+		v.position = mkVec(2*v.radius-vx(v.position), vy(v.position))
+		if vx(v.speed) < 0 {
+			v.speed = mkVec(-vx(v.speed), vy(v.speed))
 		}
-	} else if v.x > mx {
-		v.x = 2*mx - v.x
-		if v.vx > 0 {
-			v.vx = -v.vx
+	} else if vx(v.position) > maxx-v.radius {
+		v.position = mkVec(2*mx-vx(v.position), vy(v.position))
+		if vx(v.speed) > 0 {
+			v.speed = mkVec(-vx(v.speed), vy(v.speed))
 		}
 	}
-	my := wy - v.wy
-	if v.y < 0 {
-		v.y = -v.y
-		if v.vy < 0 {
-			v.vy = -v.vy
+	my := maxy - v.radius
+	if vy(v.position) < v.radius {
+		v.position = mkVec(vx(v.position), 2*v.radius-vy(v.position))
+		if vy(v.speed) < 0 {
+			v.speed = mkVec(vx(v.speed), -vy(v.speed))
 		}
-	} else if v.y > my {
-		v.y = 2*my - v.y
-		if v.vy > 0 {
-			v.vy = -v.vy
+	} else if vy(v.position) > maxy-v.radius {
+		v.position = mkVec(vx(v.position), 2*my-vy(v.position))
+		if vy(v.speed) > 0 {
+			v.speed = mkVec(vx(v.speed), -vy(v.speed))
 		}
 	}
 }
 
 func UpdateForces(sprites []*Sprite, matrix [][]float64) {
 	for _, s := range sprites {
-		s.fx = 0
-		s.fy = 0
+		s.force = mkVec(0, 0)
 	}
 
 	for i, v := range sprites {
@@ -145,8 +169,9 @@ func UpdateForces(sprites []*Sprite, matrix [][]float64) {
 			//
 			// fx := f * rx / R
 			kf := matrix[i][j] * v.mass * s.mass
-			r0 := v.rad + s.rad
-			rbig := math.Hypot(s.x-v.x, s.y-v.y)
+			r0 := v.radius + s.radius
+			rvec := s.position - v.position
+			rbig := VAbs(rvec)
 			r := rbig / r0
 			var f float64
 			if r > 1 {
@@ -159,18 +184,15 @@ func UpdateForces(sprites []*Sprite, matrix [][]float64) {
 				f += kf
 			}
 			f /= rbig
-			fx := f * (s.x - v.x)
-			fy := f * (s.y - v.y)
-			v.fx += fx
-			v.fy += fy
-			s.fx -= fx
-			s.fy -= fy
+			force := VScale(rvec, f)
+			v.force += force
+			s.force -= force
 		}
 	}
 }
 
 func (v *Sprite) Paint(cr *cairo.Context) {
-	cr.SetSourceSurface(v.surface, v.x, v.y)
+	cr.SetSourceSurface(v.surface, vx(v.position)+v.radius, vy(v.position)+v.radius)
 	cr.Paint()
 }
 
