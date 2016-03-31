@@ -34,6 +34,48 @@ type Sprite struct {
 	mass    float64
 }
 
+
+func (v *Sprite) Speed() float64 {
+    return math.Hypot(v.vx, v.vy)
+}
+
+
+type SpriteMetric struct {
+    speed    float64
+	momentum float64
+	energy   float64
+	sume     float64
+}
+
+
+func GetMax(v *SpriteMetric, sprites []*Sprite) {
+    for _, s := range sprites {
+	    speed := s.Speed()
+		if speed > v.speed {
+		    v.speed = speed
+		}
+		momentum := speed * s.mass
+		if momentum > v.momentum {
+		    v.momentum = momentum
+		}
+		energy := momentum * speed / 2
+		if energy > v.energy {
+		    v.energy = energy
+		}
+		v.sume += energy
+	}
+}
+
+
+func ScaleEnergy(sprites []*Sprite, scale float64) {
+    ratio := math.Sqrt(scale)
+    for _, s := range sprites {
+	    s.vx *= ratio
+		s.vy *= ratio
+	}
+}
+
+
 func NewSprite(wx, wy, minsize, maxsize int) *Sprite {
 	res := new(Sprite)
 	iwx := rand.Intn(maxsize-minsize+1) + minsize
@@ -58,7 +100,7 @@ func NewSprite(wx, wy, minsize, maxsize int) *Sprite {
 	return res
 }
 
-func (v *Sprite) UpdatePosition(wx, wy, dt float64) float64 {
+func (v *Sprite) UpdatePosition(wx, wy, dt float64) {
 	v.vx += v.fx / v.mass * dt
 	v.vy += v.fy / v.mass * dt
 	v.x += v.vx * dt
@@ -87,7 +129,6 @@ func (v *Sprite) UpdatePosition(wx, wy, dt float64) float64 {
 			v.vy = -v.vy
 		}
 	}
-	return math.Hypot(v.vx, v.vy)
 }
 
 func UpdateForces(sprites []*Sprite, matrix [][]float64) {
@@ -132,6 +173,13 @@ func UpdateForces(sprites []*Sprite, matrix [][]float64) {
 		}
 	}
 }
+
+
+func (v *Sprite) Paint(cr *cairo.Context) {
+	cr.SetSourceSurface(v.surface, v.x, v.y)
+	cr.Paint()
+}
+
 
 func makeSprites(sprites []*Sprite, wx, wy int) {
 	for i := 0; i < len(sprites); i++ {
@@ -199,43 +247,69 @@ func main() {
 	done := make(chan bool)
 	defer close(done)
 
-	sprites := make([]*Sprite, nsprites)
-	matrix := make([][]float64, nsprites)
+	var sprites []*Sprite
+	var matrix [][]float64
 	var fwx, fwy float64
 
 	now := time.Now()
+	start := now
 	prevstat := now
 
-	// Event handlers
-	da.Connect("configure-event", func(da *gtk.DrawingArea, ev *gdk.Event) {
-		// setup everything
+	var initialEnergySum float64 = 0.
+
+	setup := func(da *gtk.DrawingArea) {
+		sprites = make([]*Sprite, nsprites)
+		matrix = make([][]float64, nsprites)
 		wx := da.GetAllocatedWidth()
 		wy := da.GetAllocatedHeight()
 		fwx = float64(wx)
 		fwy = float64(wy)
 		makeSprites(sprites, wx, wy)
 		makeFeeling(matrix)
+
+		var m SpriteMetric
+		GetMax(&m, sprites)
+		initialEnergySum = m.sume
+	}
+
+	// Event handlers
+	da.Connect("configure-event", func(da *gtk.DrawingArea, ev *gdk.Event) {
+		// setup everything
+		if sprites == nil {
+			setup(da)
+		}
 	})
 
 	da.Connect("draw", func(da *gtk.DrawingArea, cr *cairo.Context) {
-
+		if sprites == nil {
+			setup(da)
+		}
 		prevtime := now
 		now = time.Now()
 		dt := now.Sub(prevtime).Seconds()
 
 		UpdateForces(sprites, matrix)
 
-		maxv := 0.0
-		for i := 0; i < len(sprites); i++ {
-			v := sprites[i].UpdatePosition(fwx, fwy, dt)
-			if v > maxv {
-				maxv = v
-			}
-			cr.SetSourceSurface(sprites[i].surface, sprites[i].x, sprites[i].y)
-			cr.Paint()
+		var max SpriteMetric
+		GetMax(&max, sprites)
+
+		ScaleEnergy(sprites, initialEnergySum / max.sume )
+
+		for _, s := range sprites {
+		    s.UpdatePosition(fwx, fwy, dt)
 		}
-		if now.Sub(prevstat) > time.Minute {
-			fmt.Println("pass dt=", dt, ", perf=", time.Now().Sub(now), ", maxv=", maxv)
+
+		for _, s := range sprites {
+		    s.Paint(cr)
+		}
+
+		if now.Sub(prevstat) > time.Second * 5 {
+		    prevstat = now
+			fmt.Printf("pass %.0f dt=%.3f perf=%v maxv/p/e=%.1f/%.1e/%.1e sume=%.1e\n",
+			           now.Sub(start).Seconds(),
+			           dt, time.Now().Sub(now),
+					   max.speed, max.momentum, max.energy,
+					   max.sume)
 		}
 
 		// restart the drawing
