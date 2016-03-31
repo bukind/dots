@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/conformal/gotk3/cairo"
-	"github.com/conformal/gotk3/gdk"
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/cairo"
+	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/gtk"
 	"math"
 	"math/rand"
 	"time"
@@ -34,47 +34,42 @@ type Sprite struct {
 	mass    float64
 }
 
-
 func (v *Sprite) Speed() float64 {
-    return math.Hypot(v.vx, v.vy)
+	return math.Hypot(v.vx, v.vy)
 }
 
-
 type SpriteMetric struct {
-    speed    float64
+	speed    float64
 	momentum float64
 	energy   float64
 	sume     float64
 }
 
-
 func GetMax(v *SpriteMetric, sprites []*Sprite) {
-    for _, s := range sprites {
-	    speed := s.Speed()
+	for _, s := range sprites {
+		speed := s.Speed()
 		if speed > v.speed {
-		    v.speed = speed
+			v.speed = speed
 		}
 		momentum := speed * s.mass
 		if momentum > v.momentum {
-		    v.momentum = momentum
+			v.momentum = momentum
 		}
 		energy := momentum * speed / 2
 		if energy > v.energy {
-		    v.energy = energy
+			v.energy = energy
 		}
 		v.sume += energy
 	}
 }
 
-
 func ScaleEnergy(sprites []*Sprite, scale float64) {
-    ratio := math.Sqrt(scale)
-    for _, s := range sprites {
-	    s.vx *= ratio
+	ratio := math.Sqrt(scale)
+	for _, s := range sprites {
+		s.vx *= ratio
 		s.vy *= ratio
 	}
 }
-
 
 func NewSprite(wx, wy, minsize, maxsize int) *Sprite {
 	res := new(Sprite)
@@ -174,12 +169,10 @@ func UpdateForces(sprites []*Sprite, matrix [][]float64) {
 	}
 }
 
-
 func (v *Sprite) Paint(cr *cairo.Context) {
 	cr.SetSourceSurface(v.surface, v.x, v.y)
 	cr.Paint()
 }
-
 
 func makeSprites(sprites []*Sprite, wx, wy int) {
 	for i := 0; i < len(sprites); i++ {
@@ -293,23 +286,23 @@ func main() {
 		var max SpriteMetric
 		GetMax(&max, sprites)
 
-		ScaleEnergy(sprites, initialEnergySum / max.sume )
+		ScaleEnergy(sprites, initialEnergySum/max.sume)
 
 		for _, s := range sprites {
-		    s.UpdatePosition(fwx, fwy, dt)
+			s.UpdatePosition(fwx, fwy, dt)
 		}
 
 		for _, s := range sprites {
-		    s.Paint(cr)
+			s.Paint(cr)
 		}
 
-		if now.Sub(prevstat) > time.Second * 5 {
-		    prevstat = now
+		if now.Sub(prevstat) > time.Second*5 {
+			prevstat = now
 			fmt.Printf("pass %.0f dt=%.3f perf=%v maxv/p/e=%.1f/%.1e/%.1e sume=%.1e\n",
-			           now.Sub(start).Seconds(),
-			           dt, time.Now().Sub(now),
-					   max.speed, max.momentum, max.energy,
-					   max.sume)
+				now.Sub(start).Seconds(),
+				dt, time.Now().Sub(now),
+				max.speed, max.momentum, max.energy,
+				max.sume)
 		}
 
 		// restart the drawing
