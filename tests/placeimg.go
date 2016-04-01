@@ -15,10 +15,10 @@ import (
 var minsize int = 5
 var maxsize int = 20
 var maxfps int64 = 20
-var nsprites int = 50
+var nsprites int = 2
 var maxspeed float64 = 10.0
-var minforce float64 = 0.1
-var maxforce float64 = 0.5
+var minforce float64 = 10
+var maxforce float64 = 100
 var fullscreen bool = false
 
 type Vector complex128
@@ -130,6 +130,24 @@ func (v *Sprite) UpdatePosition(maxx, maxy, dt float64) {
 	}
 }
 
+func (v *Sprite) UpdateSpeed(old State) {
+	scale := 0.5 / v.mass
+	v.s.speed += VScale((v.s.force + old.force), scale)
+}
+
+func collectState(sprites []*Sprite) ([]State, float64, float64) {
+	potential := 0.0
+	kinetic := 0.0
+	state := make([]State, len(sprites))
+	for i, v := range sprites {
+		state[i] = v.s
+		potential += v.s.energy
+		speed := VAbs(v.s.speed)
+		kinetic += v.mass * speed * speed / 2
+	}
+	return state, potential, kinetic
+}
+
 // UpdateDynamics calculates the force and the potential energy of
 // the sprite.
 // The potential energy is by the formula:
@@ -160,14 +178,18 @@ func UpdateDynamics(sprites []*Sprite, matrix [][]float64) {
 			rvec := s.s.pos - v.s.pos
 			rlen := VAbs(rvec)
 			r := rlen / rmin
+			kf := matrix[i][j] * v.mass * s.mass
+			var f float64
 			if r < 1 {
 				r = 1
+				f = 0
+			} else {
+			    f = kf / (r * r) / rlen
 			}
-			f := matrix[i][j] * v.mass * s.mass / (r * r) / rlen
 			force := VScale(rvec, f)
 			v.s.force += force
 			s.s.force -= force
-			energy := matrix[i][j] * v.mass * s.mass / r
+			energy := kf / r
 			v.s.energy += energy
 			s.s.energy += energy
 		}
@@ -176,13 +198,20 @@ func UpdateDynamics(sprites []*Sprite, matrix [][]float64) {
 
 func UpdateKinematics(sprites []*Sprite, matrix [][]float64) {
 	// keep the original state
-	// TODO
+	oldstate, oldpot, oldkin := collectState(sprites)
 
 	// update the force and the energy of the sprites
 	UpdateDynamics(sprites, matrix)
 
 	// update speed
-	// TODO
+	for i, v := range sprites {
+		v.UpdateSpeed(oldstate[i])
+	}
+
+	_, newpot, newkin := collectState(sprites)
+
+	fmt.Printf("W/K=%f/%f -> W/K=%f,%f D=%f\n",
+		oldpot, oldkin, newpot, newkin, newpot+newkin-oldpot-oldkin)
 }
 
 func (v *Sprite) Paint(cr *cairo.Context) {
@@ -201,11 +230,11 @@ func makeFeeling(matrix [][]float64) {
 		matrix[i] = make([]float64, len(matrix))
 	}
 	for i := 0; i < len(matrix); i++ {
-		for j := 0; j < len(matrix); j++ {
+		for j := i; j < len(matrix); j++ {
 			if i == j {
 				matrix[i][j] = 0
 			} else {
-				f := rand.Float64()*(maxforce-minforce) + maxforce
+				f := mkRand(minforce, maxforce)
 				if rand.Intn(2) > 0 {
 					f = -f
 				}
@@ -219,13 +248,13 @@ func makeFeeling(matrix [][]float64) {
 func main() {
 
 	// options
-	flag.IntVar(&nsprites, "nsprites", 10, "Set the number of sprites")
-	flag.IntVar(&minsize, "minsize", 5, "Set the minsize")
-	flag.IntVar(&maxsize, "maxsize", 40, "Set the maxsize")
-	flag.Int64Var(&maxfps, "maxfps", 20, "Set the maximum fps")
-	flag.Float64Var(&maxspeed, "maxspeed", 10., "Set the maxspeed")
-	flag.Float64Var(&minforce, "minforce", 0., "Set the minforce")
-	flag.Float64Var(&maxforce, "maxforce", 3., "Set the maxforce")
+	flag.IntVar(&nsprites, "nsprites", nsprites, "Set the number of sprites")
+	flag.IntVar(&minsize, "minsize", minsize, "Set the minsize")
+	flag.IntVar(&maxsize, "maxsize", maxsize, "Set the maxsize")
+	flag.Int64Var(&maxfps, "maxfps", maxfps, "Set the maximum fps")
+	flag.Float64Var(&maxspeed, "maxspeed", maxspeed, "Set the maxspeed")
+	flag.Float64Var(&minforce, "minforce", minforce, "Set the minforce")
+	flag.Float64Var(&maxforce, "maxforce", maxforce, "Set the maxforce")
 	flag.BoolVar(&fullscreen, "fullscreen", false, "Allow to run fullscreen")
 
 	flag.Parse()
