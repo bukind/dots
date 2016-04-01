@@ -163,7 +163,7 @@ func UpdateDynamics(sprites []*Sprite, matrix [][]float64) {
 	}
 
 	for i, v := range sprites {
-		for j, s := range sprites[i+1:] {
+		for j, s := range sprites[:i] {
 			// d mv = f dt
 			// for k > 0 that is attraction:
 			// r = R/r0
@@ -210,8 +210,10 @@ func UpdateKinematics(sprites []*Sprite, matrix [][]float64) {
 
 	_, newpot, newkin := collectState(sprites)
 
+	delta := newpot+newkin-oldpot-oldkin
+
 	fmt.Printf("W/K=%f/%f -> W/K=%f,%f D=%f\n",
-		oldpot, oldkin, newpot, newkin, newpot+newkin-oldpot-oldkin)
+		oldpot, oldkin, newpot, newkin, delta)
 }
 
 func (v *Sprite) Paint(cr *cairo.Context) {
@@ -242,6 +244,13 @@ func makeFeeling(matrix [][]float64) {
 				matrix[j][i] = f
 			}
 		}
+	}
+	fmt.Println("Matrix follow:")
+	for i := 0; i < len(matrix); i++ {
+	    for j := 0; j < len(matrix); j++ {
+		    fmt.Printf(" %f", matrix[i][j])
+		}
+		fmt.Println()
 	}
 }
 
