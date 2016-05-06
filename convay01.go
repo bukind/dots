@@ -12,14 +12,29 @@ import (
 var fullscreen bool = false
 var xsize int = 400
 var ysize int = 400
-var pattern0 int64 = 0x1b1b1b1b1b1b1b1b
-var pattern1 int64 = 0x6c6c6c6c6c6c6c6c
+var pattern0 int64 = 0x1818181818181818
+var pattern1 int64 = 0x6060606060606060
 
-const cellSize = 5
-const gapSize = 0
-const bitsPerCell = 2
-const cellsPerInt = 64 / bitsPerCell
-const cellMask = (1 << bitsPerCell) - 1
+const cellSize = 12
+const gapSize = 4
+
+var colorNames []string
+var bitsPerCell uint
+var cellsPerInt int
+var cellMask int64
+
+const totalStates = 3 // empty, young, old
+
+func init() {
+	bitsPerCell = 1
+	for i := 1; i < totalStates-1; i <<= 1 {
+		bitsPerCell++
+	}
+	cellMask = (int64(1) << bitsPerCell) - 1
+	cellsPerInt = 64 / int(bitsPerCell)
+	colorNames = []string{"white", "lightgreen", "blue", "white",
+		"white", "white", "white", "white"}[0:totalStates]
+}
 
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "Failure: %v", err)
@@ -27,13 +42,14 @@ func fail(err error) {
 }
 
 type cellType struct {
-	r, g, b  float64 // rgb
+	color    *gdk.RGBA
 	cellMask int64
 }
 
 type Playground struct {
-	area      [][]int64
-	cellTypes []cellType
+	area        [][]int64
+	cellTypes   []*cellType
+	cellsPerRow int
 }
 
 func NewPlayground() *Playground {
@@ -44,7 +60,11 @@ func (pg *Playground) Step() {
 	fmt.Printf("step %p\n", pg)
 }
 
-func (pg *Playground) Init(wx, wy int) {
+func (pg *Playground) Init(da *gtk.DrawingArea) {
+	fmt.Println("configure-event")
+	wx := da.GetAllocatedWidth()
+	wy := da.GetAllocatedHeight()
+
 	nx := wx / (cellSize + gapSize)
 	if nx <= 0 {
 		panic("Too narrow area")
@@ -54,6 +74,7 @@ func (pg *Playground) Init(wx, wy int) {
 		panic("Too short area")
 	}
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
+	pg.cellsPerRow = nx
 	for i := 0; i < wy; i++ {
 		row := make([]int64, rowLen)
 		pattern := pattern0
@@ -65,27 +86,47 @@ func (pg *Playground) Init(wx, wy int) {
 		}
 		pg.area = append(pg.area, row)
 	}
+	// define cell types
+	pg.cellTypes = make([]*cellType, totalStates)
+	for i := 0; i < len(pg.cellTypes); i++ {
+		ct := new(cellType)
+		pg.cellTypes[i] = ct
+		ct.color = gdk.NewRGBA()
+		if !ct.color.Parse(colorNames[i]) {
+			panic("failed to parse color name")
+		}
+		ct.cellMask = int64(i)
+	}
 }
 
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
-	wx := da.GetAllocatedWidth()
-	wy := da.GetAllocatedHeight()
-	pg.Init(wx, wy)
 	_ = ev
+	pg.Init(da)
 }
 
 func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
-	_ = da
 	_ = cr
+	if pg.area == nil {
+		pg.Init(da)
+	}
+	fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
 	dx := float64(cellSize + gapSize)
 	for iy, row := range pg.area {
+		fmt.Printf("row #%d nx:%d, ct:%d\n", iy, len(row), len(pg.cellTypes))
 		y := float64(iy) * dx
 		for _, cellType := range pg.cellTypes {
-			cr.SetSourceRGB(cellType.r, cellType.g, cellType.b)
+			rgba := cellType.color.Floats()
+			cr.SetSourceRGB(rgba[0], rgba[1], rgba[2])
 			for ix, value := range row {
-				for idx := 0; idx < cellsPerInt; idx++ {
+				maxIdx := ix + cellsPerInt
+				if maxIdx > pg.cellsPerRow {
+					maxIdx = pg.cellsPerRow
+				}
+				for idx := ix; idx < maxIdx; idx++ {
 					if value&cellMask == cellType.cellMask {
-						cr.Rectangle(dx*float64(ix+idx), y, cellSize, cellSize)
+						// fmt.Printf("x:%d, y:%d, rgb:%.1f/%.1f/%.1f\n", idx, iy,
+						//           rgba[0], rgba[1], rgba[2])
+						cr.Rectangle(dx*float64(idx), y, cellSize, cellSize)
 					}
 					value >>= bitsPerCell
 				}
