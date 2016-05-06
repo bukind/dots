@@ -18,23 +18,12 @@ var pattern1 int64 = 0x6060606060606060
 const cellSize = 12
 const gapSize = 4
 
-var colorNames []string
-var bitsPerCell uint
-var cellsPerInt int
-var cellMask int64
-
 const totalStates = 3 // empty, young, old
+const bitsPerCell = 2
+const cellsPerInt = 64 / bitsPerCell
+const cellMask = (1 << bitsPerCell) - 1
 
-func init() {
-	bitsPerCell = 1
-	for i := 1; i < totalStates-1; i <<= 1 {
-		bitsPerCell++
-	}
-	cellMask = (int64(1) << bitsPerCell) - 1
-	cellsPerInt = 64 / int(bitsPerCell)
-	colorNames = []string{"white", "lightgreen", "blue", "white",
-		"white", "white", "white", "white"}[0:totalStates]
-}
+var colorNames = []string{"white", "lightgreen", "blue"}
 
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "Failure: %v", err)
@@ -112,7 +101,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
 	dx := float64(cellSize + gapSize)
 	for iy, row := range pg.area {
-		fmt.Printf("row #%d nx:%d, ct:%d\n", iy, len(row), len(pg.cellTypes))
+		// fmt.Printf("row #%d nx:%d, ct:%d\n", iy, len(row), len(pg.cellTypes))
 		y := float64(iy) * dx
 		for _, cellType := range pg.cellTypes {
 			rgba := cellType.color.Floats()
@@ -142,6 +131,9 @@ func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 	switch ev.KeyVal() {
 	case gdk.KEY_Escape:
 		gtk.MainQuit()
+	case gdk.KEY_space:
+		pg.Step()
+		win.QueueDraw()
 	}
 }
 
@@ -197,6 +189,17 @@ func main() {
 
 	if xsize == -1 || ysize == -1 {
 		fullscreen = true
+	}
+
+	// check pattern0, pattern1
+	p0 := pattern0
+	p1 := pattern1
+	for i := 0; i < cellsPerInt; i++ {
+		if (p0&cellMask) >= totalStates || (p1&cellMask) >= totalStates {
+			panic("Bad pattern")
+		}
+		p0 >>= bitsPerCell
+		p1 >>= bitsPerCell
 	}
 
 	gtk.Init(nil)
