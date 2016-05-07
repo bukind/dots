@@ -12,8 +12,8 @@ import (
 var fullscreen bool = false
 var xsize int = 400
 var ysize int = 400
-var pattern0 int64 = 0x1818181818181818
-var pattern1 int64 = 0x6060606060606060
+var pattern0 uint64 = 0x1818181818181818
+var pattern1 uint64 = 0x6060606060606060
 
 const cellSize = 12
 const gapSize = 4
@@ -32,17 +32,51 @@ func fail(err error) {
 
 type cellType struct {
 	color    *gdk.RGBA
-	cellMask int64
+	cellMask uint64
 }
 
 type Playground struct {
-	area        [][]int64
+	area        [][]uint64
 	cellTypes   []*cellType
 	cellsPerRow int
+	lastIntMask uint64
+	lastCellOffset uint
 }
 
 func NewPlayground() *Playground {
 	return new(Playground)
+}
+
+//     01 01 01 01 prev
+//     >> 01 01 01 01 prev+   -> 11 11 11 11
+//  01 01 01 01 << prev-
+//
+//     01 01 01 01 this - ignored
+//     >> 01 01 01 01 this+   -> 10 10 10 10
+//  01 01 01 01 << this-
+//
+//     01 01 01 01 next       -> 11 11 11 11
+//     >> 01 01 01 01 next+
+//  01 01 01 01 << next-
+
+
+func (pg *Playground) tripleRow(iy int) ([]uint64, []uint64, []uint64) {
+	orig := pg.area[iy]
+	nint := len(orig)
+	plus := make([]uint64, nint)
+	for i := 0; i < nint-1; i++ {
+	    plus[i] = (orig[i] >> bitsPerCell) | (orig[i+1] << (64-bitsPerCell))
+	}
+	// wrap lowest int
+	plus[nint-1] = (orig[nint-1] >> bitsPerCell) | ((orig[0] & cellMask) << pg.lastCellOffset)
+
+	minus := make([]uint64, nint)
+	for i := 1; i < nint; i++ {
+	    minus[i] = (orig[i] << bitsPerCell) | (orig[i-1] >> (64-bitsPerCell))
+	}
+	minus[0] = (orig[0] << bitsPerCell) | ((orig[nint-1] >> pg.lastCellOffset) & cellMask)
+
+	return orig, minus, plus
 }
 
 func (pg *Playground) Step() {
@@ -64,8 +98,13 @@ func (pg *Playground) Init(da *gtk.DrawingArea) {
 	}
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
 	pg.cellsPerRow = nx
+	extraCells := rowLen * cellsPerInt - nx
+	// the mask of the last int in the row
+	pg.lastIntMask = ^uint64(0) >> uint(extraCells * bitsPerCell)
+	// the offset the the last cell in the last int
+	pg.lastCellOffset = uint((extraCells - 1) * bitsPerCell)
 	for i := 0; i < wy; i++ {
-		row := make([]int64, rowLen)
+		row := make([]uint64, rowLen)
 		pattern := pattern0
 		if i%2 == 1 {
 			pattern = pattern1
@@ -73,6 +112,7 @@ func (pg *Playground) Init(da *gtk.DrawingArea) {
 		for j := 0; j < rowLen; j++ {
 			row[j] = pattern
 		}
+		row[rowLen-1] &= pg.lastIntMask
 		pg.area = append(pg.area, row)
 	}
 	// define cell types
@@ -84,7 +124,7 @@ func (pg *Playground) Init(da *gtk.DrawingArea) {
 		if !ct.color.Parse(colorNames[i]) {
 			panic("failed to parse color name")
 		}
-		ct.cellMask = int64(i)
+		ct.cellMask = uint64(i)
 	}
 }
 
@@ -112,7 +152,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 					maxIdx = pg.cellsPerRow
 				}
 				for idx := ix; idx < maxIdx; idx++ {
-					if value&cellMask == cellType.cellMask {
+					if value & cellMask == cellType.cellMask {
 						// fmt.Printf("x:%d, y:%d, rgb:%.1f/%.1f/%.1f\n", idx, iy,
 						//           rgba[0], rgba[1], rgba[2])
 						cr.Rectangle(dx*float64(idx), y, cellSize, cellSize)
@@ -180,8 +220,8 @@ func setupWindow(playground *Playground) error {
 
 func main() {
 
-	flag.Int64Var(&pattern0, "pattern0", pattern0, "Set the initial pattern #0")
-	flag.Int64Var(&pattern1, "pattern1", pattern1, "Set the initial pattern #1")
+	flag.Uint64Var(&pattern0, "pattern0", pattern0, "Set the initial pattern #0")
+	flag.Uint64Var(&pattern1, "pattern1", pattern1, "Set the initial pattern #1")
 	flag.IntVar(&xsize, "xsize", xsize, "Set the X size, or -1")
 	flag.IntVar(&ysize, "ysize", ysize, "Set the Y size, or -1")
 
