@@ -27,9 +27,9 @@ const cellMask = (1 << bitsPerCell) - 1
 type ShiftType int
 
 const (
-    SHIFT_NONE  ShiftType = iota
-    SHIFT_FIRST
-    SHIFT_ALL
+	SHIFT_NONE ShiftType = iota
+	SHIFT_FIRST
+	SHIFT_ALL
 )
 
 var colorNames = []string{"white", "lightgreen", "blue"}
@@ -45,10 +45,10 @@ type cellType struct {
 }
 
 type Playground struct {
-	area        [][]uint64
-	cellTypes   []*cellType
-	cellsPerRow int
-	lastIntMask uint64
+	area           [][]uint64
+	cellTypes      []*cellType
+	cellsPerRow    int
+	lastIntMask    uint64
 	lastCellOffset uint
 }
 
@@ -68,21 +68,20 @@ func NewPlayground() *Playground {
 //     >> 01 01 01 01 next+
 //  01 01 01 01 << next-
 
-
 // Returns three rows: normal, shifed left, shifted right.
 func (pg *Playground) tripleRow(iy int) [][]uint64 {
 	orig := pg.area[iy]
 	nint := len(orig)
 	plus := make([]uint64, nint)
 	for i := 0; i < nint-1; i++ {
-	    plus[i] = (orig[i] >> bitsPerCell) | (orig[i+1] << (64-bitsPerCell))
+		plus[i] = (orig[i] >> bitsPerCell) | (orig[i+1] << (64 - bitsPerCell))
 	}
 	// wrap lowest int
 	plus[nint-1] = (orig[nint-1] >> bitsPerCell) | ((orig[0] & cellMask) << pg.lastCellOffset)
 
 	minus := make([]uint64, nint)
 	for i := 1; i < nint; i++ {
-	    minus[i] = (orig[i] << bitsPerCell) | (orig[i-1] >> (64-bitsPerCell))
+		minus[i] = (orig[i] << bitsPerCell) | (orig[i-1] >> (64 - bitsPerCell))
 	}
 	minus[0] = (orig[0] << bitsPerCell) | ((orig[nint-1] >> pg.lastCellOffset) & cellMask)
 
@@ -98,16 +97,16 @@ func (pg *Playground) tripleRow(iy int) [][]uint64 {
 // 1e,1f    -> 11..
 // Sumup 8 rows to count the number of bits.
 func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
-    res := make([][]uint64, 4)
-    // young cells - lower bits
+	res := make([][]uint64, 4)
+	// young cells - lower bits
 	var nul []uint64
-    a := pg.sumup3(arg[0], arg[1], arg[2], SHIFT_NONE)
+	a := pg.sumup3(arg[0], arg[1], arg[2], SHIFT_NONE)
 	b := pg.sumup3(arg[6], arg[7], arg[8], SHIFT_NONE)
 	c := pg.sumup3(arg[4], arg[5], nul, SHIFT_NONE)
 	d := pg.sumup3(a, b, c, SHIFT_NONE) // bit0
 	e := pg.sumup3(a, b, c, SHIFT_ALL)
 	f := pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
-	g := pg.sumup3(e, f, nul, SHIFT_ALL) // bits2,3
+	g := pg.sumup3(e, f, nul, SHIFT_ALL)   // bits2,3
 	res[0] = pg.join2(d, f)
 	res[1] = g
 	// older cells - higher bits
@@ -117,37 +116,37 @@ func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
 	d = pg.sumup3(a, b, c, SHIFT_NONE) // bit0
 	e = pg.sumup3(a, b, c, SHIFT_ALL)
 	f = pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
-	g = pg.sumup3(e, f, nul, SHIFT_ALL) // bit2,3
+	g = pg.sumup3(e, f, nul, SHIFT_ALL)   // bit2,3
 	res[2] = pg.join2(d, f)
 	res[3] = g
 	return res
 }
 
 func (pg *Playground) join2(x, y []uint64) []uint64 {
-    nint := len(x)
-    res := make([]uint64, nint)
+	nint := len(x)
+	res := make([]uint64, nint)
 	for i := 0; i < nint; i++ {
-	    res[i] = (x[i] & lowBits64) | ((y[i] & lowBits64) << 1)
+		res[i] = (x[i] & lowBits64) | ((y[i] & lowBits64) << 1)
 	}
 	return res
 }
 
 func (pg *Playground) sumup3(x, y, z []uint64, shift ShiftType) []uint64 {
-    nint := len(x)
-	res := make([]uint64,nint)
+	nint := len(x)
+	res := make([]uint64, nint)
 	for i := 0; i < nint; i++ {
-	    a := x[i]
+		a := x[i]
 		b := y[i]
 		c := uint64(0)
 		if len(z) > 0 {
-		    c = z[i]
+			c = z[i]
 		}
 		if shift == SHIFT_ALL {
-		    a >>= 1
+			a >>= 1
 			b >>= 1
 			c >>= 1
 		} else if shift == SHIFT_FIRST {
-		    a >>= 1
+			a >>= 1
 		}
 		a &= lowBits64
 		b &= lowBits64
@@ -161,24 +160,25 @@ func (pg *Playground) Step() {
 	fmt.Printf("step %p\n", pg)
 	nrows := len(pg.area)
 	next := make([][]uint64, nrows) // the next state of the area
-	roll := make([][]uint64, 9) // working area
+	roll := make([][]uint64, 9)     // working area
 	first := pg.tripleRow(0)
-	last := pg.tripleRow(nrows-1)
-	copy(roll[3:6],last)
-	copy(roll[6:9],first)
+	last := pg.tripleRow(nrows - 1)
+	copy(roll[3:6], last)
+	copy(roll[6:9], first)
 	for iy := 0; iy < nrows; iy++ {
-	    // shift all rows
-		copy(roll[0:3],roll[3:6])
-		copy(roll[3:6],roll[6:9])
+		// shift all rows
+		copy(roll[0:3], roll[3:6])
+		copy(roll[3:6], roll[6:9])
 		// fill the next row
 		idx := iy + 1
 		if idx < nrows {
-		    copy(roll[6:9],pg.tripleRow(idx))
+			copy(roll[6:9], pg.tripleRow(idx))
 		} else {
-		    copy(roll[6:9],first)
+			copy(roll[6:9], first)
 		}
 		// now sumup all rows
 		bits := pg.sumup8(roll)
+		// all young cells convert to old
 		_ = bits
 	}
 	_ = next
@@ -200,9 +200,9 @@ func (pg *Playground) Init(da *gtk.DrawingArea) {
 	}
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
 	pg.cellsPerRow = nx
-	extraCells := rowLen * cellsPerInt - nx
+	extraCells := rowLen*cellsPerInt - nx
 	// the mask of the last int in the row
-	pg.lastIntMask = ^uint64(0) >> uint(extraCells * bitsPerCell)
+	pg.lastIntMask = ^uint64(0) >> uint(extraCells*bitsPerCell)
 	// the offset the the last cell in the last int
 	pg.lastCellOffset = uint((extraCells - 1) * bitsPerCell)
 	for i := 0; i < wy; i++ {
@@ -254,7 +254,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 					maxIdx = pg.cellsPerRow
 				}
 				for idx := ix; idx < maxIdx; idx++ {
-					if value & cellMask == cellType.cellMask {
+					if value&cellMask == cellType.cellMask {
 						// fmt.Printf("x:%d, y:%d, rgb:%.1f/%.1f/%.1f\n", idx, iy,
 						//           rgba[0], rgba[1], rgba[2])
 						cr.Rectangle(dx*float64(idx), y, cellSize, cellSize)
@@ -347,7 +347,6 @@ func main() {
 	gtk.Init(nil)
 
 	playground := NewPlayground()
-	playground.Step()
 
 	if err := setupWindow(playground); err != nil {
 		fail(err)
