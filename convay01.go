@@ -69,7 +69,8 @@ func NewPlayground() *Playground {
 //  01 01 01 01 << next-
 
 
-func (pg *Playground) tripleRow(iy int) ([]uint64, []uint64, []uint64) {
+// Returns three rows: normal, shifed left, shifted right.
+func (pg *Playground) tripleRow(iy int) [][]uint64 {
 	orig := pg.area[iy]
 	nint := len(orig)
 	plus := make([]uint64, nint)
@@ -85,7 +86,7 @@ func (pg *Playground) tripleRow(iy int) ([]uint64, []uint64, []uint64) {
 	}
 	minus[0] = (orig[0] << bitsPerCell) | ((orig[nint-1] >> pg.lastCellOffset) & cellMask)
 
-	return orig, minus, plus
+	return [][]uint64{orig, minus, plus}
 }
 
 // 01,01,01 -> 11 -> 1a,a1
@@ -95,6 +96,7 @@ func (pg *Playground) tripleRow(iy int) ([]uint64, []uint64, []uint64) {
 // 1a,1b,1c -> 11. -> 1e.,e1.
 // 1d,e1    -> 11. -> 1f.,x1.
 // 1e,1f    -> 11..
+// Sumup 8 rows to count the number of bits.
 func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
     res := make([][]uint64, 4)
     // young cells - lower bits
@@ -157,12 +159,30 @@ func (pg *Playground) sumup3(x, y, z []uint64, shift ShiftType) []uint64 {
 
 func (pg *Playground) Step() {
 	fmt.Printf("step %p\n", pg)
-	next := make([][]uint64,len(pg.area))
-	roll := make([][]uint64, 9)
-	tripleRow(pg.area[len(pg.area]-1))
-	for iy := 0; iy < len(pg.area); iy++ {
-
+	nrows := len(pg.area)
+	next := make([][]uint64, nrows) // the next state of the area
+	roll := make([][]uint64, 9) // working area
+	first := pg.tripleRow(0)
+	last := pg.tripleRow(nrows-1)
+	copy(roll[3:6],last)
+	copy(roll[6:9],first)
+	for iy := 0; iy < nrows; iy++ {
+	    // shift all rows
+		copy(roll[0:3],roll[3:6])
+		copy(roll[3:6],roll[6:9])
+		// fill the next row
+		idx := iy + 1
+		if idx < nrows {
+		    copy(roll[6:9],pg.tripleRow(idx))
+		} else {
+		    copy(roll[6:9],first)
+		}
+		// now sumup all rows
+		bits := pg.sumup8(roll)
+		_ = bits
 	}
+	_ = next
+	fmt.Println("step done\n")
 }
 
 func (pg *Playground) Init(da *gtk.DrawingArea) {
