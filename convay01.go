@@ -15,6 +15,7 @@ var ysize int = 400
 var pattern0 uint64 = 0x1818181818181818
 var pattern1 uint64 = 0x6060606060606060
 
+const lowBits64 uint64 = 0x5555555555555555
 const cellSize = 12
 const gapSize = 4
 
@@ -22,6 +23,14 @@ const totalStates = 3 // empty, young, old
 const bitsPerCell = 2
 const cellsPerInt = 64 / bitsPerCell
 const cellMask = (1 << bitsPerCell) - 1
+
+type ShiftType int
+
+const (
+    SHIFT_NONE  ShiftType = iota
+    SHIFT_FIRST
+    SHIFT_ALL
+)
 
 var colorNames = []string{"white", "lightgreen", "blue"}
 
@@ -79,8 +88,81 @@ func (pg *Playground) tripleRow(iy int) ([]uint64, []uint64, []uint64) {
 	return orig, minus, plus
 }
 
+// 01,01,01 -> 11 -> 1a,a1
+// 01,01,01 -> 11 -> 1b,b1
+// 01,01    -> 11 -> 1c,c1
+// a1,b1,c1 -> 11 -> 1d,x1
+// 1a,1b,1c -> 11. -> 1e.,e1.
+// 1d,e1    -> 11. -> 1f.,x1.
+// 1e,1f    -> 11..
+func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
+    res := make([][]uint64, 4)
+    // young cells - lower bits
+	var nul []uint64
+    a := pg.sumup3(arg[0], arg[1], arg[2], SHIFT_NONE)
+	b := pg.sumup3(arg[6], arg[7], arg[8], SHIFT_NONE)
+	c := pg.sumup3(arg[4], arg[5], nul, SHIFT_NONE)
+	d := pg.sumup3(a, b, c, SHIFT_NONE) // bit0
+	e := pg.sumup3(a, b, c, SHIFT_ALL)
+	f := pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
+	g := pg.sumup3(e, f, nul, SHIFT_ALL) // bits2,3
+	res[0] = pg.join2(d, f)
+	res[1] = g
+	// older cells - higher bits
+	a = pg.sumup3(arg[0], arg[1], arg[2], SHIFT_ALL)
+	b = pg.sumup3(arg[6], arg[7], arg[8], SHIFT_ALL)
+	c = pg.sumup3(arg[4], arg[5], nul, SHIFT_ALL)
+	d = pg.sumup3(a, b, c, SHIFT_NONE) // bit0
+	e = pg.sumup3(a, b, c, SHIFT_ALL)
+	f = pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
+	g = pg.sumup3(e, f, nul, SHIFT_ALL) // bit2,3
+	res[2] = pg.join2(d, f)
+	res[3] = g
+	return res
+}
+
+func (pg *Playground) join2(x, y []uint64) []uint64 {
+    nint := len(x)
+    res := make([]uint64, nint)
+	for i := 0; i < nint; i++ {
+	    res[i] = (x[i] & lowBits64) | ((y[i] & lowBits64) << 1)
+	}
+	return res
+}
+
+func (pg *Playground) sumup3(x, y, z []uint64, shift ShiftType) []uint64 {
+    nint := len(x)
+	res := make([]uint64,nint)
+	for i := 0; i < nint; i++ {
+	    a := x[i]
+		b := y[i]
+		c := uint64(0)
+		if len(z) > 0 {
+		    c = z[i]
+		}
+		if shift == SHIFT_ALL {
+		    a >>= 1
+			b >>= 1
+			c >>= 1
+		} else if shift == SHIFT_FIRST {
+		    a >>= 1
+		}
+		a &= lowBits64
+		b &= lowBits64
+		c &= lowBits64
+		res[i] = a + b + c
+	}
+	return res
+}
+
 func (pg *Playground) Step() {
 	fmt.Printf("step %p\n", pg)
+	next := make([][]uint64,len(pg.area))
+	roll := make([][]uint64, 9)
+	tripleRow(pg.area[len(pg.area]-1))
+	for iy := 0; iy < len(pg.area); iy++ {
+
+	}
 }
 
 func (pg *Playground) Init(da *gtk.DrawingArea) {
