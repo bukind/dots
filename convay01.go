@@ -100,32 +100,32 @@ func (pg *Playground) tripleRow(iy int) [][]uint64 {
 // (1e,1f    -> 11..) - not needed as we dont care about exact values of higher bits
 // Instead we use OR to combine them.
 //
-func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
+func sumup8(arg [][]uint64) [][]uint64 {
 	res := make([][]uint64, 3)
 	// young cells - lower bits
-	a := pg.sumup3(arg[0], arg[1], &arg[2], SHIFT_NONE)
-	b := pg.sumup3(arg[6], arg[7], &arg[8], SHIFT_NONE)
-	c := pg.sumup3(arg[4], arg[5], nil, SHIFT_NONE)
-	d := pg.sumup3(a, b, &c, SHIFT_NONE) // bit0
-	e := pg.sumup3(a, b, &c, SHIFT_ALL)
-	f := pg.sumup3(d, e, nil, SHIFT_FIRST) // bit1
+	a := sumup3(arg[0], arg[1], &arg[2], SHIFT_NONE)
+	b := sumup3(arg[6], arg[7], &arg[8], SHIFT_NONE)
+	c := sumup3(arg[4], arg[5], nil, SHIFT_NONE)
+	d := sumup3(a, b, &c, SHIFT_NONE) // bit0
+	e := sumup3(a, b, &c, SHIFT_ALL)
+	f := sumup3(d, e, nil, SHIFT_FIRST) // bit1
 	res[0] = d
 	res[1] = f
-	res[2] = pg.bitor3(e, f, nil, SHIFT_ALL)
+	res[2] = bitor3(e, f, nil, SHIFT_ALL)
 	// total cells
-	a = pg.sumup3(arg[0], arg[1], &arg[2], SHIFT_ALL)
-	b = pg.sumup3(arg[6], arg[7], &arg[8], SHIFT_ALL)
-	c = pg.sumup3(arg[4], arg[5], &res[0], SHIFT_TWO)
-	d = pg.sumup3(a, b, &c, SHIFT_NONE) // bit0
-	e = pg.sumup3(a, b, &c, SHIFT_ALL)
-	f = pg.sumup3(d, e, &res[1], SHIFT_FIRST) // bit1
-	res[0] = pg.join2(res[0], d)
-	res[1] = pg.join2(res[1], f)
-	res[2] = pg.join2(res[2], pg.bitor3(e, f, &res[2], SHIFT_TWO))
+	a = sumup3(arg[0], arg[1], &arg[2], SHIFT_ALL)
+	b = sumup3(arg[6], arg[7], &arg[8], SHIFT_ALL)
+	c = sumup3(arg[4], arg[5], &res[0], SHIFT_TWO)
+	d = sumup3(a, b, &c, SHIFT_NONE) // bit0
+	e = sumup3(a, b, &c, SHIFT_ALL)
+	f = sumup3(d, e, &res[1], SHIFT_FIRST) // bit1
+	res[0] = join2(res[0], d)
+	res[1] = join2(res[1], f)
+	res[2] = join2(res[2], bitor3(e, f, &res[2], SHIFT_TWO))
 	return res
 }
 
-func (pg *Playground) join2(x, y []uint64) []uint64 {
+func join2(x, y []uint64) []uint64 {
 	nint := len(x)
 	res := make([]uint64, nint)
 	for i := 0; i < nint; i++ {
@@ -134,7 +134,7 @@ func (pg *Playground) join2(x, y []uint64) []uint64 {
 	return res
 }
 
-func (pg *Playground) div2(x []uint64) []uint64 {
+func div2(x []uint64) []uint64 {
 	nint := len(x)
 	res := make([]uint64, nint)
 	for i := 0; i < nint; i++ {
@@ -150,7 +150,7 @@ var shifts = [][]uint{
 	{1, 1, 1},
 }
 
-func (pg *Playground) sumup3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
+func sumup3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
 	nint := len(x)
 	res := make([]uint64, nint)
 	as := shifts[int(shift)][0]
@@ -170,7 +170,7 @@ func (pg *Playground) sumup3(x, y []uint64, z *[]uint64, shift ShiftType) []uint
 	return res
 }
 
-func (pg *Playground) bitor3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
+func bitor3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
 	nint := len(x)
 	res := make([]uint64, nint)
 	as := shifts[shift][0]
@@ -206,7 +206,7 @@ func (pg *Playground) Step() {
 			copy(roll[6:9], first)
 		}
 		// now sumup all rows
-		counts := pg.sumup8(roll)
+		counts := sumup8(roll)
 		// rules are:
 		// 1. a young cell converts to old
 		// 2. an empty cell converts to young cell if YO=[0,3] or YO=[1,2]
