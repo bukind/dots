@@ -29,6 +29,7 @@ type ShiftType int
 const (
 	SHIFT_NONE ShiftType = iota
 	SHIFT_FIRST
+	SHIFT_TWO
 	SHIFT_ALL
 )
 
@@ -88,41 +89,39 @@ func (pg *Playground) tripleRow(iy int) [][]uint64 {
 	return [][]uint64{orig, minus, plus}
 }
 
+// Sumup 8 rows to count the number of young and all (young+old) cells around.
+//
 // 01,01,01 -> 11 -> 1a,a1
 // 01,01,01 -> 11 -> 1b,b1
 // 01,01    -> 11 -> 1c,c1
 // a1,b1,c1 -> 11 -> 1d,x1
 // 1a,1b,1c -> 11. -> 1e.,e1.
 // 1d,e1    -> 11. -> 1f.,x1.
-// 1e,1f    -> 11..
-// Sumup 8 rows to count the number of bits.
+// (1e,1f    -> 11..) - not needed as we dont care about exact values of higher bits
+// Instead we use OR to combine them.
+//
 func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
-	res := make([][]uint64, 4)
+	res := make([][]uint64, 3)
 	// young cells - lower bits
-	var nul []uint64
-	a := pg.sumup3(arg[0], arg[1], arg[2], SHIFT_NONE)
-	b := pg.sumup3(arg[6], arg[7], arg[8], SHIFT_NONE)
-	c := pg.sumup3(arg[4], arg[5], nul, SHIFT_NONE)
-	d := pg.sumup3(a, b, c, SHIFT_NONE) // bit0
-	e := pg.sumup3(a, b, c, SHIFT_ALL)
-	f := pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
-	g := pg.sumup3(e, f, nul, SHIFT_ALL)   // bits2,3
+	a := pg.sumup3(arg[0], arg[1], &arg[2], SHIFT_NONE)
+	b := pg.sumup3(arg[6], arg[7], &arg[8], SHIFT_NONE)
+	c := pg.sumup3(arg[4], arg[5], nil, SHIFT_NONE)
+	d := pg.sumup3(a, b, &c, SHIFT_NONE) // bit0
+	e := pg.sumup3(a, b, &c, SHIFT_ALL)
+	f := pg.sumup3(d, e, nil, SHIFT_FIRST) // bit1
 	res[0] = d
 	res[1] = f
-	res[2] = g
-	res[3] = pg.div2(g)
-	// older cells - higher bits
-	a = pg.sumup3(arg[0], arg[1], arg[2], SHIFT_ALL)
-	b = pg.sumup3(arg[6], arg[7], arg[8], SHIFT_ALL)
-	c = pg.sumup3(arg[4], arg[5], nul, SHIFT_ALL)
-	d = pg.sumup3(a, b, c, SHIFT_NONE) // bit0
-	e = pg.sumup3(a, b, c, SHIFT_ALL)
-	f = pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
-	g = pg.sumup3(e, f, nul, SHIFT_ALL)   // bit2,3
+	res[2] = pg.bitor3(e, f, nil, SHIFT_ALL)
+	// total cells
+	a = pg.sumup3(arg[0], arg[1], &arg[2], SHIFT_ALL)
+	b = pg.sumup3(arg[6], arg[7], &arg[8], SHIFT_ALL)
+	c = pg.sumup3(arg[4], arg[5], &res[0], SHIFT_TWO)
+	d = pg.sumup3(a, b, &c, SHIFT_NONE) // bit0
+	e = pg.sumup3(a, b, &c, SHIFT_ALL)
+	f = pg.sumup3(d, e, &res[1], SHIFT_FIRST) // bit1
 	res[0] = pg.join2(res[0], d)
 	res[1] = pg.join2(res[1], f)
-	res[2] = pg.join2(res[2], g)
-	res[3] = pg.join2(res[3], pg.div2(g))
+	res[2] = pg.join2(res[2], pg.bitor3(e, f, &res[2], SHIFT_TWO))
 	return res
 }
 
@@ -144,27 +143,44 @@ func (pg *Playground) div2(x []uint64) []uint64 {
 	return res
 }
 
-func (pg *Playground) sumup3(x, y, z []uint64, shift ShiftType) []uint64 {
+var shifts = [][]uint{
+	{0, 0, 0},
+	{1, 0, 0},
+	{1, 1, 0},
+	{1, 1, 1},
+}
+
+func (pg *Playground) sumup3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
 	nint := len(x)
 	res := make([]uint64, nint)
+	as := shifts[int(shift)][0]
+	bs := shifts[int(shift)][1]
+	cs := shifts[int(shift)][2]
+	if z == nil {
+		// we use a trick - res is initialized with 0.
+		// so if len(z) == 0, then we will use res as a source for z
+		z = &res
+	}
 	for i := 0; i < nint; i++ {
-		a := x[i]
-		b := y[i]
-		c := uint64(0)
-		if len(z) > 0 {
-			c = z[i]
-		}
-		if shift == SHIFT_ALL {
-			a >>= 1
-			b >>= 1
-			c >>= 1
-		} else if shift == SHIFT_FIRST {
-			a >>= 1
-		}
-		a &= lowBits64
-		b &= lowBits64
-		c &= lowBits64
+		a := (x[i] >> as) & lowBits64
+		b := (y[i] >> bs) & lowBits64
+		c := ((*z)[i] >> cs) & lowBits64
 		res[i] = a + b + c
+	}
+	return res
+}
+
+func (pg *Playground) bitor3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
+	nint := len(x)
+	res := make([]uint64, nint)
+	as := shifts[shift][0]
+	bs := shifts[shift][1]
+	cs := shifts[shift][2]
+	if z == nil {
+		z = &res
+	}
+	for i := 0; i < nint; i++ {
+		res[i] = ((x[i] >> as) | (y[i] >> bs) | ((*z)[i] >> cs)) & lowBits64
 	}
 	return res
 }
