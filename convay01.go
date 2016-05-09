@@ -107,8 +107,10 @@ func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
 	e := pg.sumup3(a, b, c, SHIFT_ALL)
 	f := pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
 	g := pg.sumup3(e, f, nul, SHIFT_ALL)   // bits2,3
-	res[0] = pg.join2(d, f)
-	res[1] = g
+	res[0] = d
+	res[1] = f
+	res[2] = g
+	res[3] = pg.div2(g)
 	// older cells - higher bits
 	a = pg.sumup3(arg[0], arg[1], arg[2], SHIFT_ALL)
 	b = pg.sumup3(arg[6], arg[7], arg[8], SHIFT_ALL)
@@ -117,8 +119,10 @@ func (pg *Playground) sumup8(arg [][]uint64) [][]uint64 {
 	e = pg.sumup3(a, b, c, SHIFT_ALL)
 	f = pg.sumup3(d, e, nul, SHIFT_FIRST) // bit1
 	g = pg.sumup3(e, f, nul, SHIFT_ALL)   // bit2,3
-	res[2] = pg.join2(d, f)
-	res[3] = g
+	res[0] = pg.join2(res[0], d)
+	res[1] = pg.join2(res[1], f)
+	res[2] = pg.join2(res[2], g)
+	res[3] = pg.join2(res[3], pg.div2(g))
 	return res
 }
 
@@ -127,6 +131,15 @@ func (pg *Playground) join2(x, y []uint64) []uint64 {
 	res := make([]uint64, nint)
 	for i := 0; i < nint; i++ {
 		res[i] = (x[i] & lowBits64) | ((y[i] & lowBits64) << 1)
+	}
+	return res
+}
+
+func (pg *Playground) div2(x []uint64) []uint64 {
+	nint := len(x)
+	res := make([]uint64, nint)
+	for i := 0; i < nint; i++ {
+		res[i] = x[i] >> 1
 	}
 	return res
 }
@@ -177,9 +190,12 @@ func (pg *Playground) Step() {
 			copy(roll[6:9], first)
 		}
 		// now sumup all rows
-		bits := pg.sumup8(roll)
-		// all young cells convert to old
-		_ = bits
+		counts := pg.sumup8(roll)
+		// rules are:
+		// 1. a young cell converts to old
+		// 2. an empty cell converts to young cell if YO=[0,3] or YO=[1,2]
+		// 3. an old cell remains live if YO=[0,2..3] or YO=[1,1..2]
+		_ = counts
 	}
 	_ = next
 	fmt.Println("step done\n")
