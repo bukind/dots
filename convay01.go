@@ -205,12 +205,14 @@ func (pg *Playground) Step() {
 		} else {
 			copy(roll[6:9], first)
 		}
-		// now sumup all rows
+		// now sumup all young and total number of adjacent cells.
+		// counts has three arrays with T (total) and Y (young) bits
+		// for every cell.  bit0 (TY), bit1 (TY) and bit2+ (TY).
 		counts := sumup8(roll)
 		// rules are:
-		// 1. a young cell converts to old
-		// 2. an empty cell converts to young cell if YO=[0,3] or YO=[1,2]
-		// 3. an old cell remains live if YO=[0,2..3] or YO=[1,1..2]
+		// 1. each young cell converts to old.
+		// 2. an empty cell converts to young cell if Y<2 and T=3
+		// 3. an old cell remains live if Y<2 and T=[2..3]
 		_ = counts
 	}
 	_ = next
