@@ -211,11 +211,33 @@ func (pg *Playground) Step() {
 		counts := sumup8(roll)
 		// rules are:
 		// 1. each young cell converts to old.
-		// 2. an empty cell converts to young cell if Y<2 and T=3
-		// 3. an old cell remains live if Y<2 and T=[2..3]
-		_ = counts
+		// 2. an empty cell converts to young cell if Y<2 and T=3, otherwise is empty
+		// 3. an old cell remains live if Y<2 and T=[2..3], otherwise is empty
+		nint := len(pg.area[iy])
+		next[iy] = make([]uint64, nint)
+		for ix := 0; ix < nint; ix++ {
+			orig := pg.area[iy][ix]
+			bit0 := counts[0][ix]
+			bit1 := counts[1][ix]
+			not2 := ^counts[2][ix]
+			//       empty young old
+			// orig:  00,   01,   10
+			// bit0:  1.    ..    ..
+			// bit1:  10    ..    10
+			// not2:  11    ..    11
+
+			// out:   01    10    10
+
+			// common mask for empty->young and old->old
+			mask := not2 & (not2 >> 1) & ^bit1 & (bit1 >> 1)
+			noto := ^orig
+			newyng := noto & (noto >> 1) & (bit0 >> 1) & mask
+			newold := (orig>>1)&mask | orig
+			next[iy][ix] = (newyng & lowBits64) | ((newold & lowBits64) << 1)
+		}
+		next[iy][nint-1] &= pg.lastIntMask
 	}
-	_ = next
+	pg.area = next
 	fmt.Println("step done\n")
 }
 
