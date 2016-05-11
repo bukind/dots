@@ -16,8 +16,9 @@ var pattern0 uint64 = 0x1818181818181818
 var pattern1 uint64 = 0x6060606060606060
 
 const lowBits64 uint64 = 0x5555555555555555
-const cellSize = 12
-const gapSize = 4
+
+var cellSize uint = 12
+var gapSize uint = 4
 
 const totalStates = 3 // empty, young, old
 const bitsPerCell = 2
@@ -294,8 +295,8 @@ func (pg *Playground) Clean() {
 
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
-	nx := da.GetAllocatedWidth() / (cellSize + gapSize)
-	ny := da.GetAllocatedHeight() / (cellSize + gapSize)
+	nx := da.GetAllocatedWidth() / int(cellSize+gapSize)
+	ny := da.GetAllocatedHeight() / int(cellSize+gapSize)
 	pg.Init(nx, ny)
 }
 
@@ -306,6 +307,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	}
 	fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
 	dx := float64(cellSize + gapSize)
+	cs := float64(cellSize)
 	for iy, row := range pg.area {
 		// fmt.Printf("row #%d nx:%d, ct:%d\n", iy, len(row), len(pg.cellTypes))
 		y := float64(iy) * dx
@@ -321,7 +323,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 					if value&cellMask == cellType.cellMask {
 						// fmt.Printf("x:%d, y:%d, rgb:%.1f/%.1f/%.1f\n", idx, iy,
 						//           rgba[0], rgba[1], rgba[2])
-						cr.Rectangle(dx*float64(idx), y, cellSize, cellSize)
+						cr.Rectangle(dx*float64(idx), y, cs, cs)
 					}
 					value >>= bitsPerCell
 				}
@@ -369,8 +371,9 @@ func showbin(v uint64) string {
 
 func mouseClicked(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
 	ev := gdk.EventButton{evt}
-	ix := int(ev.X() / (cellSize + gapSize))
-	iy := int(ev.Y() / (cellSize + gapSize))
+	dx := float64(cellSize + gapSize)
+	ix := int(ev.X() / dx)
+	iy := int(ev.Y() / dx)
 	idx := ix / cellsPerInt
 	v := pg.area[iy][idx]
 	mask := cellMask << uint(bitsPerCell*(ix%cellsPerInt))
@@ -439,6 +442,8 @@ func main() {
 	flag.Uint64Var(&pattern1, "pattern1", pattern1, "Set the initial pattern #1")
 	flag.IntVar(&xsize, "xsize", xsize, "Set the X size, or -1")
 	flag.IntVar(&ysize, "ysize", ysize, "Set the Y size, or -1")
+	flag.UintVar(&cellSize, "cellsize", cellSize, "The size of the cell")
+	flag.UintVar(&gapSize, "gapsize", gapSize, "The size of the gap")
 
 	flag.Parse()
 

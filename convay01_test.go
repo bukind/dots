@@ -95,20 +95,20 @@ func TestSumup3(t *testing.T) {
 }
 
 func TestPlaygroundInit(t *testing.T) {
-    pg := NewPlayground()
+	pg := NewPlayground()
 	if pg == nil {
-		t.Fatal("cannot make a new playground");
+		t.Fatal("cannot make a new playground")
 	}
 	nx := 7
 	ny := 5
 	pg.Init(nx, ny)
 	if len(pg.area) != ny {
-	    t.Error("invalid pg.ny")
+		t.Error("invalid pg.ny")
 	}
 	if pg.cellsPerRow != nx {
-	    t.Error("invalid pg.nx")
+		t.Error("invalid pg.nx")
 	}
-	if len(pg.area[0]) != (nx+cellsPerInt-1) / cellsPerInt {
-	    t.Error("invalid pg.intx")
+	if len(pg.area[0]) != (nx+cellsPerInt-1)/cellsPerInt {
+		t.Error("invalid pg.intx")
 	}
 }
