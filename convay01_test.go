@@ -94,21 +94,41 @@ func TestSumup3(t *testing.T) {
 	}
 }
 
+func ExpectInt(t *testing.T, s string, a, b int) {
+	if a != b {
+		t.Errorf("invalid %s: %d != %d", s, a, b)
+	}
+}
+
+func ExpectUint(t *testing.T, s string, a, b uint) {
+	if a != b {
+		t.Errorf("invalid %s: %d != %d", s, a, b)
+	}
+}
+
+func ExpectUint64(t *testing.T, s string, a, b uint64) {
+	if a != b {
+		t.Errorf("invalid %s: %x != %x", s, a, b)
+	}
+}
+
 func TestPlaygroundInit(t *testing.T) {
-	pg := NewPlayground(7, 1)
+	var cellSize uint = 7
+	var gapSize uint = 1
+	pg := NewPlayground(cellSize, gapSize)
 	if pg == nil {
 		t.Fatal("cannot make a new playground")
 	}
+	ExpectUint(t, "pg.cellSize", pg.cellSize, cellSize)
+	ExpectUint(t, "pg.gapSize", pg.gapSize, gapSize)
+
 	nx := 7
 	ny := 5
 	pg.Init(nx, ny)
-	if len(pg.area) != ny {
-		t.Error("invalid pg.ny")
-	}
-	if pg.cellsPerRow != nx {
-		t.Error("invalid pg.nx")
-	}
-	if len(pg.area[0]) != (nx+cellsPerInt-1)/cellsPerInt {
-		t.Error("invalid pg.intx")
-	}
+	ExpectInt(t, "len(pg.area)", len(pg.area), ny)
+	ExpectInt(t, "pg.cellsPerRow", pg.cellsPerRow, nx)
+	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 1)
+	ExpectInt(t, "len(pg.cellTypes)", len(pg.cellTypes), 3)
+	ExpectUint64(t, "pg.lastIntMask", pg.lastIntMask, 0x3fff)
+	ExpectUint(t, "pg.lastCellOffset", pg.lastCellOffset, 12)
 }

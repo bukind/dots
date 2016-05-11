@@ -255,11 +255,14 @@ func (pg *Playground) Init(nx, ny int) {
 	}
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
 	pg.cellsPerRow = nx
-	extraCells := rowLen*cellsPerInt - nx
+	lastIntCells := nx - cellsPerInt*(rowLen-1)
+	if lastIntCells <= 0 {
+		panic("Invalid lastIntCells")
+	}
 	// the mask of the last int in the row
-	pg.lastIntMask = ^uint64(0) >> uint(extraCells*bitsPerCell)
+	pg.lastIntMask = ^(^uint64(0) << uint(lastIntCells*bitsPerCell))
 	// the offset the the last cell in the last int
-	pg.lastCellOffset = uint((extraCells - 1) * bitsPerCell)
+	pg.lastCellOffset = uint((lastIntCells - 1) * bitsPerCell)
 	for i := 0; i < ny; i++ {
 		row := make([]uint64, rowLen)
 		pattern := pattern0
