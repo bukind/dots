@@ -22,7 +22,7 @@ const gapSize = 4
 const totalStates = 3 // empty, young, old
 const bitsPerCell = 2
 const cellsPerInt = 64 / bitsPerCell
-const cellMask = (1 << bitsPerCell) - 1
+const cellMask uint64 = (1 << bitsPerCell) - 1
 
 type ShiftType int
 
@@ -286,6 +286,14 @@ func (pg *Playground) Init(da *gtk.DrawingArea) {
 	}
 }
 
+func (pg *Playground) Clean() {
+	for iy := 0; iy < len(pg.area); iy++ {
+		for ix := 0; ix < len(pg.area[iy]); ix++ {
+			pg.area[iy][ix] = 0
+		}
+	}
+}
+
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
 	pg.Init(da)
@@ -326,13 +334,58 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 	_ = win
 	ev := gdk.EventKey{evt}
+	fmt.Printf("key: val:%d state:%d type:%v\n", ev.KeyVal(), ev.State(), ev.Type())
 	switch ev.KeyVal() {
 	case gdk.KEY_Escape:
 		gtk.MainQuit()
 	case gdk.KEY_space:
 		pg.Step()
 		win.QueueDraw()
+	case gdk.KEY_C:
+		pg.Clean()
+		win.QueueDraw()
 	}
+}
+
+func showbin(v uint64) string {
+	var r []byte
+	for i := 0; i < cellsPerInt; i++ {
+		var c byte
+		switch v & cellMask {
+		case 0:
+			c = '.'
+		case 1:
+			c = 'o'
+		case 2:
+			c = 'X'
+		case 3:
+			c = '?'
+		}
+		r = append(r, c)
+		v >>= bitsPerCell
+	}
+	return string(r)
+}
+
+func mouseClicked(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
+	ev := gdk.EventButton{evt}
+	ix := int(ev.X() / (cellSize + gapSize))
+	iy := int(ev.Y() / (cellSize + gapSize))
+	idx := ix / cellsPerInt
+	v := pg.area[iy][idx]
+	mask := cellMask << uint(bitsPerCell*(ix%cellsPerInt))
+	v0 := ^v & mask
+	nv := (((v0 & (v0 >> 1)) | (v&mask)<<1) & mask) | (v & ^mask)
+	fmt.Printf("mouse: btn:%d bnt-val:%d state:%d type:%v ix,iy,idx,i:%d,%d,%d,%d\n",
+		ev.Button(), ev.ButtonVal(),
+		ev.State(), ev.Type(),
+		ix, iy, idx, ix%cellsPerInt)
+	fmt.Printf("old: %s\n", showbin(v))
+	fmt.Printf("msk: %s\n", showbin(mask))
+	fmt.Printf("new: %s\n", showbin(nv))
+	pg.area[iy][idx] = nv
+	win.QueueDraw()
+	return true
 }
 
 func setupWindow(playground *Playground) error {
@@ -370,6 +423,10 @@ func setupWindow(playground *Playground) error {
 	}
 
 	if _, err = win.Connect("key-press-event", winKeyPress, playground); err != nil {
+		return err
+	}
+
+	if _, err = win.Connect("button-press-event", mouseClicked, playground); err != nil {
 		return err
 	}
 
