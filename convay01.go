@@ -17,9 +17,6 @@ var pattern1 uint64 = 0x6060606060606060
 
 const lowBits64 uint64 = 0x5555555555555555
 
-var cellSize uint = 12
-var gapSize uint = 4
-
 const totalStates = 3 // empty, young, old
 const bitsPerCell = 2
 const cellsPerInt = 64 / bitsPerCell
@@ -47,6 +44,8 @@ type cellType struct {
 }
 
 type Playground struct {
+	cellSize       uint
+	gapSize        uint
 	area           [][]uint64
 	cellTypes      []*cellType
 	cellsPerRow    int
@@ -54,8 +53,11 @@ type Playground struct {
 	lastCellOffset uint
 }
 
-func NewPlayground() *Playground {
-	return new(Playground)
+func NewPlayground(cellSize, gapSize uint) *Playground {
+	pg := new(Playground)
+	pg.cellSize = cellSize
+	pg.gapSize = gapSize
+	return pg
 }
 
 //     01 01 01 01 prev
@@ -245,11 +247,9 @@ func (pg *Playground) Step() {
 func (pg *Playground) Init(nx, ny int) {
 	fmt.Println("configure-event")
 
-	// nx := wx / (cellSize + gapSize)
 	if nx <= 0 {
 		panic("Too narrow area")
 	}
-	// ny := wy / (cellSize + gapSize)
 	if ny <= 0 {
 		panic("Too short area")
 	}
@@ -295,8 +295,8 @@ func (pg *Playground) Clean() {
 
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
-	nx := da.GetAllocatedWidth() / int(cellSize+gapSize)
-	ny := da.GetAllocatedHeight() / int(cellSize+gapSize)
+	nx := da.GetAllocatedWidth() / int(pg.cellSize+pg.gapSize)
+	ny := da.GetAllocatedHeight() / int(pg.cellSize+pg.gapSize)
 	pg.Init(nx, ny)
 }
 
@@ -306,8 +306,8 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 		areaSetup(da, nil, pg)
 	}
 	fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
-	dx := float64(cellSize + gapSize)
-	cs := float64(cellSize)
+	dx := float64(pg.cellSize + pg.gapSize)
+	cs := float64(pg.cellSize)
 	for iy, row := range pg.area {
 		// fmt.Printf("row #%d nx:%d, ct:%d\n", iy, len(row), len(pg.cellTypes))
 		y := float64(iy) * dx
@@ -371,7 +371,7 @@ func showbin(v uint64) string {
 
 func mouseClicked(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
 	ev := gdk.EventButton{evt}
-	dx := float64(cellSize + gapSize)
+	dx := float64(pg.cellSize + pg.gapSize)
 	ix := int(ev.X() / dx)
 	iy := int(ev.Y() / dx)
 	idx := ix / cellsPerInt
@@ -438,6 +438,9 @@ func setupWindow(playground *Playground) error {
 
 func main() {
 
+	var cellSize uint = 12
+	var gapSize uint = 4
+
 	flag.Uint64Var(&pattern0, "pattern0", pattern0, "Set the initial pattern #0")
 	flag.Uint64Var(&pattern1, "pattern1", pattern1, "Set the initial pattern #1")
 	flag.IntVar(&xsize, "xsize", xsize, "Set the X size, or -1")
@@ -464,7 +467,7 @@ func main() {
 
 	gtk.Init(nil)
 
-	playground := NewPlayground()
+	playground := NewPlayground(cellSize, gapSize)
 
 	if err := setupWindow(playground); err != nil {
 		fail(err)

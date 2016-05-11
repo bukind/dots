@@ -95,7 +95,7 @@ func TestSumup3(t *testing.T) {
 }
 
 func TestPlaygroundInit(t *testing.T) {
-	pg := NewPlayground()
+	pg := NewPlayground(7, 1)
 	if pg == nil {
 		t.Fatal("cannot make a new playground")
 	}
