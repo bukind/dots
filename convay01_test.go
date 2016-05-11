@@ -93,3 +93,22 @@ func TestSumup3(t *testing.T) {
 		t.Errorf("sum: 1+1+1 != 11")
 	}
 }
+
+func TestPlaygroundInit(t *testing.T) {
+    pg := NewPlayground()
+	if pg == nil {
+		t.Fatal("cannot make a new playground");
+	}
+	nx := 7
+	ny := 5
+	pg.Init(nx, ny)
+	if len(pg.area) != ny {
+	    t.Error("invalid pg.ny")
+	}
+	if pg.cellsPerRow != nx {
+	    t.Error("invalid pg.nx")
+	}
+	if len(pg.area[0]) != (nx+cellsPerInt-1) / cellsPerInt {
+	    t.Error("invalid pg.intx")
+	}
+}

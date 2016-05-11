@@ -241,16 +241,14 @@ func (pg *Playground) Step() {
 	fmt.Println("step done\n")
 }
 
-func (pg *Playground) Init(da *gtk.DrawingArea) {
+func (pg *Playground) Init(nx, ny int) {
 	fmt.Println("configure-event")
-	wx := da.GetAllocatedWidth()
-	wy := da.GetAllocatedHeight()
 
-	nx := wx / (cellSize + gapSize)
+	// nx := wx / (cellSize + gapSize)
 	if nx <= 0 {
 		panic("Too narrow area")
 	}
-	ny := wy / (cellSize + gapSize)
+	// ny := wy / (cellSize + gapSize)
 	if ny <= 0 {
 		panic("Too short area")
 	}
@@ -261,7 +259,7 @@ func (pg *Playground) Init(da *gtk.DrawingArea) {
 	pg.lastIntMask = ^uint64(0) >> uint(extraCells*bitsPerCell)
 	// the offset the the last cell in the last int
 	pg.lastCellOffset = uint((extraCells - 1) * bitsPerCell)
-	for i := 0; i < wy; i++ {
+	for i := 0; i < ny; i++ {
 		row := make([]uint64, rowLen)
 		pattern := pattern0
 		if i%2 == 1 {
@@ -296,13 +294,15 @@ func (pg *Playground) Clean() {
 
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
-	pg.Init(da)
+	nx := da.GetAllocatedWidth() / (cellSize + gapSize)
+	ny := da.GetAllocatedHeight() / (cellSize + gapSize)
+	pg.Init(nx, ny)
 }
 
 func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	_ = cr
 	if pg.area == nil {
-		pg.Init(da)
+		areaSetup(da, nil, pg)
 	}
 	fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
 	dx := float64(cellSize + gapSize)
