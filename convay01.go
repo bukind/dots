@@ -14,6 +14,7 @@ var xsize int = 400
 var ysize int = 400
 var pattern0 uint64 = 0x1818181818181818
 var pattern1 uint64 = 0x6060606060606060
+var initialConfig = ""
 
 const lowBits64 uint64 = 0x5555555555555555
 
@@ -44,6 +45,7 @@ type cellType struct {
 }
 
 type Playground struct {
+	da             *gtk.DrawingArea
 	cellSize       uint
 	gapSize        uint
 	area           [][]uint64
@@ -51,6 +53,7 @@ type Playground struct {
 	cellsPerRow    int
 	lastIntMask    uint64
 	lastCellOffset uint
+	iterations     int
 }
 
 func NewPlayground(cellSize, gapSize uint) *Playground {
@@ -189,7 +192,7 @@ func bitor3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
 }
 
 func (pg *Playground) Step() {
-	fmt.Printf("step %p\n", pg)
+	// fmt.Printf("step %p\n", pg)
 	nrows := len(pg.area)
 	next := make([][]uint64, nrows) // the next state of the area
 	roll := make([][]uint64, 9)     // working area
@@ -241,10 +244,10 @@ func (pg *Playground) Step() {
 		next[iy][nint-1] &= pg.lastIntMask
 	}
 	pg.area = next
-	fmt.Println("step done\n")
+	// fmt.Println("step done\n")
 }
 
-func (pg *Playground) Init(nx, ny int) {
+func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 	fmt.Println("configure-event")
 
 	if nx <= 0 {
@@ -254,6 +257,7 @@ func (pg *Playground) Init(nx, ny int) {
 		panic("Too short area")
 	}
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
+	pg.da = da
 	pg.cellsPerRow = nx
 	lastIntCells := nx - cellsPerInt*(rowLen-1)
 	if lastIntCells <= 0 {
@@ -265,14 +269,16 @@ func (pg *Playground) Init(nx, ny int) {
 	pg.lastCellOffset = uint((lastIntCells - 1) * bitsPerCell)
 	for i := 0; i < ny; i++ {
 		row := make([]uint64, rowLen)
-		pattern := pattern0
-		if i%2 == 1 {
-			pattern = pattern1
+		if initialConfig == "" {
+			pattern := pattern0
+			if i%2 == 1 {
+				pattern = pattern1
+			}
+			for j := 0; j < rowLen; j++ {
+				row[j] = pattern
+			}
+			row[rowLen-1] &= pg.lastIntMask
 		}
-		for j := 0; j < rowLen; j++ {
-			row[j] = pattern
-		}
-		row[rowLen-1] &= pg.lastIntMask
 		pg.area = append(pg.area, row)
 	}
 	// define cell types
@@ -286,6 +292,46 @@ func (pg *Playground) Init(nx, ny int) {
 		}
 		ct.cellMask = uint64(i)
 	}
+	pg.iterations = 0
+
+	switch initialConfig {
+	case "line":
+		pg.setDots(ny/2, nx/2-3, "1222221")
+	case "":
+		// do nothing
+	default:
+		pg.setDots(ny/2, nx/2, "221")
+		pg.setDots(ny/2+1, nx/2, "002")
+		pg.setDots(ny/2+2, nx/2, "2")
+	}
+}
+
+func (pg *Playground) setDots(y, x int, dots string) {
+	for ; y < 0; y += len(pg.area) {
+	}
+	for ; y >= len(pg.area); y -= len(pg.area) {
+	}
+	for ; x < 0; x += pg.cellsPerRow {
+	}
+	for ; x >= pg.cellsPerRow; x -= pg.cellsPerRow {
+	}
+	// TODO(bukind): optimize the loop
+	for i := 0; i < len(dots); i++ {
+		ix := x / cellsPerInt
+		shift := uint((x - ix*cellsPerInt) * bitsPerCell)
+		var v uint64
+		switch dots[i] {
+		case '0':
+			v = 0
+		case '1':
+			v = 1
+		case '2':
+			v = 2
+		}
+		nv := pg.area[y][ix] & ^(cellMask<<shift) + ((1 << shift) * v)
+		pg.area[y][ix] = nv
+		x++
+	}
 }
 
 func (pg *Playground) Clean() {
@@ -296,11 +342,19 @@ func (pg *Playground) Clean() {
 	}
 }
 
+func (pg *Playground) StepAndDraw() {
+	if pg.iterations > 0 {
+		pg.iterations--
+		pg.Step()
+		pg.da.QueueDraw()
+	}
+}
+
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
 	nx := da.GetAllocatedWidth() / int(pg.cellSize+pg.gapSize)
 	ny := da.GetAllocatedHeight() / int(pg.cellSize+pg.gapSize)
-	pg.Init(nx, ny)
+	pg.Init(da, nx, ny)
 }
 
 func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
@@ -308,7 +362,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	if pg.area == nil {
 		areaSetup(da, nil, pg)
 	}
-	fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
+	// fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
 	dx := float64(pg.cellSize + pg.gapSize)
 	cs := float64(pg.cellSize)
 	for iy, row := range pg.area {
@@ -318,11 +372,12 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 			rgba := cellType.color.Floats()
 			cr.SetSourceRGB(rgba[0], rgba[1], rgba[2])
 			for ix, value := range row {
-				maxIdx := ix + cellsPerInt
+				idx0 := ix * cellsPerInt
+				maxIdx := idx0 + cellsPerInt
 				if maxIdx > pg.cellsPerRow {
 					maxIdx = pg.cellsPerRow
 				}
-				for idx := ix; idx < maxIdx; idx++ {
+				for idx := idx0; idx < maxIdx; idx++ {
 					if value&cellMask == cellType.cellMask {
 						// fmt.Printf("x:%d, y:%d, rgb:%.1f/%.1f/%.1f\n", idx, iy,
 						//           rgba[0], rgba[1], rgba[2])
@@ -333,6 +388,9 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 			}
 			cr.Fill()
 		}
+	}
+	if pg.iterations > 0 {
+		pg.StepAndDraw()
 	}
 }
 
@@ -345,10 +403,13 @@ func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 		gtk.MainQuit()
 	case gdk.KEY_space:
 		pg.Step()
-		win.QueueDraw()
+		pg.da.QueueDraw()
 	case gdk.KEY_C:
 		pg.Clean()
-		win.QueueDraw()
+		pg.da.QueueDraw()
+	case gdk.KEY_t:
+		pg.iterations += 10
+		pg.StepAndDraw()
 	}
 }
 
@@ -390,7 +451,7 @@ func mouseClicked(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
 	fmt.Printf("msk: %s\n", showbin(mask))
 	fmt.Printf("new: %s\n", showbin(nv))
 	pg.area[iy][idx] = nv
-	win.QueueDraw()
+	pg.da.QueueDraw()
 	return true
 }
 
@@ -450,6 +511,7 @@ func main() {
 	flag.IntVar(&ysize, "ysize", ysize, "Set the Y size, or -1")
 	flag.UintVar(&cellSize, "cellsize", cellSize, "The size of the cell")
 	flag.UintVar(&gapSize, "gapsize", gapSize, "The size of the gap")
+	flag.StringVar(&initialConfig, "init", initialConfig, "The name of the initial configuration")
 
 	flag.Parse()
 

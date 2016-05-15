@@ -124,7 +124,7 @@ func TestPlaygroundInit7x5(t *testing.T) {
 
 	nx := 7
 	ny := 5
-	pg.Init(nx, ny)
+	pg.Init(nil, nx, ny)
 	ExpectInt(t, "len(pg.area)", len(pg.area), ny)
 	ExpectInt(t, "pg.cellsPerRow", pg.cellsPerRow, nx)
 	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 1)
@@ -145,7 +145,7 @@ func TestPlaygroundInit800x5(t *testing.T) {
 
 	nx := 800
 	ny := 5
-	pg.Init(nx, ny)
+	pg.Init(nil, nx, ny)
 	ExpectInt(t, "len(pg.area)", len(pg.area), ny)
 	ExpectInt(t, "pg.cellsPerRow", pg.cellsPerRow, nx)
 	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 25) // 800/32
