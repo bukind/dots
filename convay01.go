@@ -32,7 +32,7 @@ const (
 	SHIFT_ALL
 )
 
-var colorNames = []string{"white", "lightgreen", "blue"}
+var colorNames = []string{"white", "red", "blue"}
 
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "Failure: %v", err)
@@ -297,6 +297,12 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 	switch initialConfig {
 	case "line":
 		pg.setDots(ny/2, nx/2-3, "1222221")
+	case "kaka":
+		pg.setDots(ny/2+0, nx/2, "000000012")
+		pg.setDots(ny/2+1, nx/2, "2100010021")
+		pg.setDots(ny/2+2, nx/2, "0020210021")
+		pg.setDots(ny/2+3, nx/2, "222002122")
+		pg.setDots(ny/2+4, nx/2, "0110101")
 	case "":
 		// do nothing
 	default:
@@ -347,6 +353,9 @@ func (pg *Playground) StepAndDraw() {
 		pg.iterations--
 		pg.Step()
 		pg.da.QueueDraw()
+	} else if pg.iterations == -1 {
+		pg.Step()
+		pg.da.QueueDraw()
 	}
 }
 
@@ -389,7 +398,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 			cr.Fill()
 		}
 	}
-	if pg.iterations > 0 {
+	if pg.iterations != 0 {
 		pg.StepAndDraw()
 	}
 }
@@ -409,6 +418,11 @@ func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 		pg.da.QueueDraw()
 	case gdk.KEY_t:
 		pg.iterations += 10
+		pg.StepAndDraw()
+	case gdk.KEY_x:
+		pg.iterations = 0
+	case gdk.KEY_s:
+		pg.iterations = -1
 		pg.StepAndDraw()
 	}
 }
