@@ -12,14 +12,14 @@ import (
 var fullscreen bool = false
 var xsize int = 400
 var ysize int = 400
-var pattern0 uint64 = 0x1818181818181818
-var pattern1 uint64 = 0x6060606060606060
+var pattern0 uint64 = 0x0
+var pattern1 uint64 = 0x0
 var initialConfig = ""
 
 const lowBits64 uint64 = 0x5555555555555555
 
 const totalStates = 3 // empty, young, old
-const bitsPerCell = 2
+const bitsPerCell = 4
 const cellsPerInt = 64 / bitsPerCell
 const cellMask uint64 = (1 << bitsPerCell) - 1
 
@@ -256,6 +256,20 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 	if ny <= 0 {
 		panic("Too short area")
 	}
+
+	if initialConfig == "" {
+		// check pattern0, pattern1
+		p0 := pattern0
+		p1 := pattern1
+		for i := 0; i < cellsPerInt; i++ {
+			if (p0&cellMask) >= totalStates || (p1&cellMask) >= totalStates {
+				panic("Bad pattern")
+			}
+			p0 >>= bitsPerCell
+			p1 >>= bitsPerCell
+		}
+	}
+
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
 	pg.da = da
 	pg.cellsPerRow = nx
@@ -359,6 +373,14 @@ func (pg *Playground) StepAndDraw() {
 	}
 }
 
+func (pg *Playground) ShowAll() {
+	for iy := 0; iy < len(pg.area); iy++ {
+		for ix := 0; ix < len(pg.area[iy]); ix++ {
+			showbin(pg.area[iy][ix])
+		}
+	}
+}
+
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
 	nx := da.GetAllocatedWidth() / int(pg.cellSize+pg.gapSize)
@@ -440,6 +462,8 @@ func showbin(v uint64) string {
 			c = 'X'
 		case 3:
 			c = '?'
+		default:
+			c = '$'
 		}
 		r = append(r, c)
 		v >>= bitsPerCell
@@ -531,17 +555,6 @@ func main() {
 
 	if xsize == -1 || ysize == -1 {
 		fullscreen = true
-	}
-
-	// check pattern0, pattern1
-	p0 := pattern0
-	p1 := pattern1
-	for i := 0; i < cellsPerInt; i++ {
-		if (p0&cellMask) >= totalStates || (p1&cellMask) >= totalStates {
-			panic("Bad pattern")
-		}
-		p0 >>= bitsPerCell
-		p1 >>= bitsPerCell
 	}
 
 	gtk.Init(nil)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -96,19 +97,34 @@ func TestSumup3(t *testing.T) {
 
 func ExpectInt(t *testing.T, s string, a, b int) {
 	if a != b {
-		t.Errorf("invalid %s: %d != %d", s, a, b)
+		_, fn, ln, ok := runtime.Caller(1)
+		if !ok {
+			fn = "???"
+			ln = 0
+		}
+		t.Errorf("@%s:%d invalid %s: %d != %d", fn, ln, s, a, b)
 	}
 }
 
 func ExpectUint(t *testing.T, s string, a, b uint) {
 	if a != b {
-		t.Errorf("invalid %s: %d != %d", s, a, b)
+		_, fn, ln, ok := runtime.Caller(1)
+		if !ok {
+			fn = "???"
+			ln = 0
+		}
+		t.Errorf("@%s:%d invalid %s: %d != %d", fn, ln, s, a, b)
 	}
 }
 
 func ExpectUint64(t *testing.T, s string, a, b uint64) {
 	if a != b {
-		t.Errorf("invalid %s: %x != %x", s, a, b)
+		_, fn, ln, ok := runtime.Caller(1)
+		if !ok {
+			fn = "???"
+			ln = 0
+		}
+		t.Errorf("@%s:%d invalid %s: %x != %x", fn, ln, s, a, b)
 	}
 }
 
@@ -129,8 +145,8 @@ func TestPlaygroundInit7x5(t *testing.T) {
 	ExpectInt(t, "pg.cellsPerRow", pg.cellsPerRow, nx)
 	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 1)
 	ExpectInt(t, "len(pg.cellTypes)", len(pg.cellTypes), 3)
-	ExpectUint64(t, "pg.lastIntMask", pg.lastIntMask, 0x3fff)
-	ExpectUint(t, "pg.lastCellOffset", pg.lastCellOffset, 12)
+	ExpectUint64(t, "pg.lastIntMask", pg.lastIntMask, 0xfffffff)
+	ExpectUint(t, "pg.lastCellOffset", pg.lastCellOffset, 24)
 }
 
 func TestPlaygroundInit800x5(t *testing.T) {
@@ -148,8 +164,8 @@ func TestPlaygroundInit800x5(t *testing.T) {
 	pg.Init(nil, nx, ny)
 	ExpectInt(t, "len(pg.area)", len(pg.area), ny)
 	ExpectInt(t, "pg.cellsPerRow", pg.cellsPerRow, nx)
-	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 25) // 800/32
+	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 50) // 800/16
 	ExpectInt(t, "len(pg.cellTypes)", len(pg.cellTypes), 3)
 	ExpectUint64(t, "pg.lastIntMask", pg.lastIntMask, allset)
-	ExpectUint(t, "pg.lastCellOffset", pg.lastCellOffset, 62)
+	ExpectUint(t, "pg.lastCellOffset", pg.lastCellOffset, 60)
 }
