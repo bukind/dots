@@ -18,7 +18,6 @@ var initialConfig = ""
 
 const lowBits64 uint64 = 0x5555555555555555
 
-const totalStates = 3 // empty, young, old
 const bitsPerCell = 4
 const cellsPerInt = 64 / bitsPerCell
 const cellMask uint64 = (1 << bitsPerCell) - 1
@@ -32,8 +31,6 @@ const (
 	SHIFT_ALL
 )
 
-var colorNames = []string{"white", "red", "blue"}
-
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "Failure: %v", err)
 	os.Exit(1)
@@ -41,7 +38,11 @@ func fail(err error) {
 
 type cellType struct {
 	color    *gdk.RGBA
-	cellMask uint64
+}
+
+type cellValue struct {
+  young uint64
+	total uint64
 }
 
 type Playground struct {
@@ -49,7 +50,7 @@ type Playground struct {
 	cellSize       uint
 	gapSize        uint
 	area           [][]uint64
-	cellTypes      []*cellType
+	cellTypes      map[uint64]*cellType
 	cellsPerRow    int
 	lastIntMask    uint64
 	lastCellOffset uint
@@ -75,118 +76,58 @@ func NewPlayground(cellSize, gapSize uint) *Playground {
 //     >> 01 01 01 01 next+
 //  01 01 01 01 << next-
 
-// Returns three rows: normal, shifed left, shifted right.
-func (pg *Playground) tripleRow(iy int) [][]uint64 {
-	orig := pg.area[iy]
+
+func cellSplit(x uint64) cellValue {
+	const lowMask uint64 = 0x3333333333333333
+	y := x & lowMask
+  return cellValue{y, (x >> 2) & lowMask + y}
+}
+
+// Makes a running sum of the row.
+// young, total
+func tripleRow(orig []uint64, lco uint, lim uint64) []cellValue {
 	nint := len(orig)
-	plus := make([]uint64, nint)
-	for i := 0; i < nint-1; i++ {
-		plus[i] = (orig[i] >> bitsPerCell) | (orig[i+1] << (64 - bitsPerCell))
+  result := make([]cellValue, nint)
+	mask := cellMask
+	ls := uint(bitsPerCell)
+	rs := uint(64 - bitsPerCell)
+	for i := 1; i < nint-1; i++ {
+	  o := orig[i]
+		a := orig[i-1]
+		b := orig[i+1]
+		x := o + (o >> ls) + (b << rs) + (o << ls) + (a >> rs)
+		result[i] = cellSplit(x)
 	}
-	// wrap lowest int
-	plus[nint-1] = (orig[nint-1] >> bitsPerCell) | ((orig[0] & cellMask) << pg.lastCellOffset)
-
-	minus := make([]uint64, nint)
-	for i := 1; i < nint; i++ {
-		minus[i] = (orig[i] << bitsPerCell) | (orig[i-1] >> (64 - bitsPerCell))
+	if nint > 1 {
+	  o := orig[0]
+		a := orig[nint-1]
+		b := orig[1]
+		x := o + (o >> ls) + (b << rs) + (o << ls) + ((a>>lco) & mask)
+		result[0] = cellSplit(x)
+		o = orig[nint-1]
+		a = orig[nint-2]
+		b = orig[0]
+		x = o + (o >> ls) + ((b&mask) << lco) + (o << ls) + (a >> rs)
+		x &= lim
+		result[nint-1] = cellSplit(x)
+  } else {
+	  o := orig[0]
+		x := o + (o >> ls) + ((o&mask) << lco) + (o << ls) + ((o>>lco) & mask)
+		x &= lim
+		result[0] = cellSplit(x)
 	}
-	minus[0] = (orig[0] << bitsPerCell) | ((orig[nint-1] >> pg.lastCellOffset) & cellMask)
-
-	return [][]uint64{orig, minus, plus}
+	return result
 }
 
-// Sumup 8 rows to count the number of young and all (young+old) cells around.
+// Sumup 8 adjacent cells together.
+// Simple trick is to sumup all 9 cells, then subtrack the central one.
+// Thus we can reuse the running sums of the rows.
 //
-// 01,01,01 -> 11 -> 1a,a1
-// 01,01,01 -> 11 -> 1b,b1
-// 01,01    -> 11 -> 1c,c1
-// a1,b1,c1 -> 11 -> 1d,x1
-// 1a,1b,1c -> 11. -> 1e.,e1.
-// 1d,e1    -> 11. -> 1f.,x1.
-// (1e,1f    -> 11..) - not needed as we dont care about exact values of higher bits
-// Instead we use OR to combine them.
-//
-func sumup8(arg [][]uint64) [][]uint64 {
-	res := make([][]uint64, 3)
-	// young cells - lower bits
-	a := sumup3(arg[0], arg[1], &arg[2], SHIFT_NONE)
-	b := sumup3(arg[6], arg[7], &arg[8], SHIFT_NONE)
-	c := sumup3(arg[4], arg[5], nil, SHIFT_NONE)
-	d := sumup3(a, b, &c, SHIFT_NONE) // bit0
-	e := sumup3(a, b, &c, SHIFT_ALL)
-	f := sumup3(d, e, nil, SHIFT_FIRST) // bit1
-	res[0] = d
-	res[1] = f
-	res[2] = bitor3(e, f, nil, SHIFT_ALL)
-	// total cells
-	a = sumup3(arg[0], arg[1], &arg[2], SHIFT_ALL)
-	b = sumup3(arg[6], arg[7], &arg[8], SHIFT_ALL)
-	c = sumup3(arg[4], arg[5], &res[0], SHIFT_TWO)
-	d = sumup3(a, b, &c, SHIFT_NONE) // bit0
-	e = sumup3(a, b, &c, SHIFT_ALL)
-	f = sumup3(d, e, &res[1], SHIFT_FIRST) // bit1
-	res[0] = join2(res[0], d)
-	res[1] = join2(res[1], f)
-	res[2] = join2(res[2], bitor3(e, f, &res[2], SHIFT_TWO))
-	return res
-}
-
-func join2(x, y []uint64) []uint64 {
-	nint := len(x)
-	res := make([]uint64, nint)
+func sumup8(arg [][]cellValue, orig []uint64) []cellValue {
+  nint := len(orig)
+  res := make([]cellValue, nint)
 	for i := 0; i < nint; i++ {
-		res[i] = (x[i] & lowBits64) | ((y[i] & lowBits64) << 1)
-	}
-	return res
-}
-
-func div2(x []uint64) []uint64 {
-	nint := len(x)
-	res := make([]uint64, nint)
-	for i := 0; i < nint; i++ {
-		res[i] = x[i] >> 1
-	}
-	return res
-}
-
-var shifts = [][]uint{
-	{0, 0, 0},
-	{1, 0, 0},
-	{1, 1, 0},
-	{1, 1, 1},
-}
-
-func sumup3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
-	nint := len(x)
-	res := make([]uint64, nint)
-	as := shifts[int(shift)][0]
-	bs := shifts[int(shift)][1]
-	cs := shifts[int(shift)][2]
-	if z == nil {
-		// we use a trick - res is initialized with 0.
-		// so if len(z) == 0, then we will use res as a source for z
-		z = &res
-	}
-	for i := 0; i < nint; i++ {
-		a := (x[i] >> as) & lowBits64
-		b := (y[i] >> bs) & lowBits64
-		c := ((*z)[i] >> cs) & lowBits64
-		res[i] = a + b + c
-	}
-	return res
-}
-
-func bitor3(x, y []uint64, z *[]uint64, shift ShiftType) []uint64 {
-	nint := len(x)
-	res := make([]uint64, nint)
-	as := shifts[shift][0]
-	bs := shifts[shift][1]
-	cs := shifts[shift][2]
-	if z == nil {
-		z = &res
-	}
-	for i := 0; i < nint; i++ {
-		res[i] = ((x[i] >> as) | (y[i] >> bs) | ((*z)[i] >> cs)) & lowBits64
+    res[i] = arg[0][i] + arg[1][i] + arg[2][i] - cellSplit(orig[i])
 	}
 	return res
 }
@@ -195,56 +136,74 @@ func (pg *Playground) Step() {
 	// fmt.Printf("step %p\n", pg)
 	nrows := len(pg.area)
 	next := make([][]uint64, nrows) // the next state of the area
-	roll := make([][]uint64, 9)     // working area
-	first := pg.tripleRow(0)
-	last := pg.tripleRow(nrows - 1)
-	copy(roll[3:6], last)
-	copy(roll[6:9], first)
+	roll := make([][]cellValue, 3)     // working area
+	first := tripleRow(pg.area[0], pg.lastCellOffset, pg.lastIntMask)
+	last := tripleRow(pg.area[nrows-1], pg.lastCellOffset, pg.lastIntMask)
+	copy(roll[1], last)
+	copy(roll[2], first)
 	for iy := 0; iy < nrows; iy++ {
 		// shift all rows
-		copy(roll[0:3], roll[3:6])
-		copy(roll[3:6], roll[6:9])
+		copy(roll[0], roll[1])
+		copy(roll[1], roll[2])
 		// fill the next row
 		idx := iy + 1
 		if idx < nrows {
-			copy(roll[6:9], pg.tripleRow(idx))
+			copy(roll[2], tripleRow(pg.area[idx], pg.lastCellOffset, pg.lastIntMask))
 		} else {
-			copy(roll[6:9], first)
+			copy(roll[2], first)
 		}
 		// now sumup all young and total number of adjacent cells.
-		// counts has three arrays with T (total) and Y (young) bits
-		// for every cell.  bit0 (TY), bit1 (TY) and bit2+ (TY).
-		counts := sumup8(roll)
+		// counts is an array of number of Y (young) and T(total) cells around.
+		counts := sumup8(roll, pg.area[iy])
 		// rules are:
 		// 1. each young cell converts to old.
 		// 2. an empty cell converts to young cell if Y<2 and T=3, otherwise is empty
 		// 3. an old cell remains live if Y<2 and T=[2..3], otherwise is empty
 		nint := len(pg.area[iy])
 		next[iy] = make([]uint64, nint)
+		const ones uint64 = 0x1111111111111111
 		for ix := 0; ix < nint; ix++ {
 			orig := pg.area[iy][ix]
-			bit0 := counts[0][ix]
-			bit1 := counts[1][ix]
-			not2 := ^counts[2][ix]
-			//       empty young old
-			// orig:  00,   01,   10
-			// bit0:  1.    ..    ..
-			// bit1:  10    ..    10
-			// not2:  11    ..    11
-
-			// out:   01    10    10
-
-			// common mask for empty->young and old->old
-			mask := not2 & (not2 >> 1) & ^bit1 & (bit1 >> 1)
 			noto := ^orig
-			newyng := noto & (noto >> 1) & (bit0 >> 1) & mask
-			newold := (orig>>1)&mask | orig
-			next[iy][ix] = (newyng & lowBits64) | ((newold & lowBits64) << 1)
+			notyoung := ^counts[ix].young
+			total := counts[ix].total
+
+			// condition if young less than 2
+			yless2 := (notyoung >> 1) & (notyoung >> 2) & (notyoung >> 3)
+
+			// condition if total is 2 or 3
+			nott := ^total
+			total23 := (total >> 1) & (nott >> 2) & (nott >> 3)
+
+			// extract all young cells and convert them into old
+			new1 := (orig & ones) << 2
+
+			// extract all empty cells
+			empt := noto  & (noto >> 2)
+			// convert them into youngs
+			new2 := yless2 & total & total23 & ones
+
+			// extract all old cells
+			olds := orig >> 2
+			// convert them into old
+			new3 := (yless2 & total23 & olds & ones) << 2
+
+			// now combine all three outcomes
+			next[iy][ix] = new1 | new2 | new3
 		}
 		next[iy][nint-1] &= pg.lastIntMask
 	}
 	pg.area = next
 	// fmt.Println("step done\n")
+}
+
+func makeCellType(colorName string) *cellType {
+    ct := new(cellType)
+		ct.color = gdk.NewRGBA()
+		if !ct.color.Parse(colorName) {
+			panic("failed to parse color name")
+		}
+		return ct
 }
 
 func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
@@ -257,12 +216,21 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 		panic("Too short area")
 	}
 
+	// define cell types
+	pg.cellTypes = make(map[uint64]*cellType)
+	pg.cellTypes[0x0] = makeCellType("white")
+	pg.cellTypes[0x1] = makeCellType("lightgreen")
+	pg.cellTypes[0x4] = makeCellType("blue")
+
 	if initialConfig == "" {
 		// check pattern0, pattern1
 		p0 := pattern0
 		p1 := pattern1
 		for i := 0; i < cellsPerInt; i++ {
-			if (p0&cellMask) >= totalStates || (p1&cellMask) >= totalStates {
+			if _, ok := pg.cellTypes[p0&cellMask]; !ok {
+			  panic("Bad pattern")
+			}
+			if _, ok := pg.cellTypes[p1&cellMask]; !ok {
 				panic("Bad pattern")
 			}
 			p0 >>= bitsPerCell
@@ -294,17 +262,6 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 			row[rowLen-1] &= pg.lastIntMask
 		}
 		pg.area = append(pg.area, row)
-	}
-	// define cell types
-	pg.cellTypes = make([]*cellType, totalStates)
-	for i := 0; i < len(pg.cellTypes); i++ {
-		ct := new(cellType)
-		pg.cellTypes[i] = ct
-		ct.color = gdk.NewRGBA()
-		if !ct.color.Parse(colorNames[i]) {
-			panic("failed to parse color name")
-		}
-		ct.cellMask = uint64(i)
 	}
 	pg.iterations = 0
 
@@ -399,7 +356,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	for iy, row := range pg.area {
 		// fmt.Printf("row #%d nx:%d, ct:%d\n", iy, len(row), len(pg.cellTypes))
 		y := float64(iy) * dx
-		for _, cellType := range pg.cellTypes {
+		for mask, cellType := range pg.cellTypes {
 			rgba := cellType.color.Floats()
 			cr.SetSourceRGB(rgba[0], rgba[1], rgba[2])
 			for ix, value := range row {
@@ -409,7 +366,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 					maxIdx = pg.cellsPerRow
 				}
 				for idx := idx0; idx < maxIdx; idx++ {
-					if value&cellMask == cellType.cellMask {
+					if value&cellMask == mask {
 						// fmt.Printf("x:%d, y:%d, rgb:%.1f/%.1f/%.1f\n", idx, iy,
 						//           rgba[0], rgba[1], rgba[2])
 						cr.Rectangle(dx*float64(idx), y, cs, cs)
