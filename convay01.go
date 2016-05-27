@@ -55,7 +55,8 @@ type Playground struct {
 	cellsPerRow    int
 	lastIntMask    uint64
 	lastCellOffset uint
-	iterations     int
+	repeats        int    // how many times to repeat
+	iterations     uint64 // the number of steps passed
 }
 
 func NewPlayground(cellSize, gapSize uint) *Playground {
@@ -199,6 +200,7 @@ func (pg *Playground) Step() {
 		next[iy][nint-1] &= pg.lastIntMask
 	}
 	pg.area = next
+	pg.iterations++
 	// fmt.Println("step done\n")
 }
 
@@ -268,7 +270,7 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 		}
 		pg.area = append(pg.area, row)
 	}
-	pg.iterations = 0
+	pg.repeats = 0
 
 	switch initialConfig {
 	case "line":
@@ -325,11 +327,11 @@ func (pg *Playground) Clean() {
 }
 
 func (pg *Playground) StepAndDraw() {
-	if pg.iterations > 0 {
-		pg.iterations--
+	if pg.repeats > 0 {
+		pg.repeats--
 		pg.Step()
 		pg.da.QueueDraw()
-	} else if pg.iterations == -1 {
+	} else if pg.repeats == -1 {
 		pg.Step()
 		pg.da.QueueDraw()
 	}
@@ -357,6 +359,8 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	}
 	dx := float64(pg.cellSize + pg.gapSize)
 	cs := float64(pg.cellSize)
+	olds := 0
+	news := 0
 	for iy, row := range pg.area {
 		y := float64(iy) * dx
 		for mask, cellType := range pg.cellTypes {
@@ -364,8 +368,12 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 				// optimization - skip empty cells
 				continue
 			}
+			cnt := &olds
+			if mask == 1 {
+				cnt = &news
+			}
 			rgba := cellType.color.Floats()
-			cr.SetSourceRGB(rgba[0], rgba[1], rgba[2])
+			cr.SetSourceRGBA(rgba[0], rgba[1], rgba[2], rgba[3])
 			for ix, value := range row {
 				idx0 := ix * cellsPerInt
 				maxIdx := idx0 + cellsPerInt
@@ -375,6 +383,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 				for idx := idx0; idx < maxIdx; idx++ {
 					if int(value&cellMask) == mask {
 						cr.Rectangle(dx*float64(idx), y, cs, cs)
+						(*cnt)++
 					}
 					value >>= bitsPerCell
 				}
@@ -382,7 +391,12 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 			cr.Fill()
 		}
 	}
-	if pg.iterations != 0 {
+	cr.MoveTo(1., 14.)
+	cr.SetSourceRGB(0., 0., 0.)
+	cr.SetFontSize(12.)
+	cr.ShowText(fmt.Sprintf("steps:%d cells:%d old:%d", pg.iterations, olds+news, olds))
+	cr.Stroke()
+	if pg.repeats != 0 {
 		pg.StepAndDraw()
 	}
 }
@@ -401,12 +415,12 @@ func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 		pg.Clean()
 		pg.da.QueueDraw()
 	case gdk.KEY_t:
-		pg.iterations += 10
+		pg.repeats += 10
 		pg.StepAndDraw()
 	case gdk.KEY_x:
-		pg.iterations = 0
+		pg.repeats = 0
 	case gdk.KEY_s:
-		pg.iterations = -1
+		pg.repeats = -1
 		pg.StepAndDraw()
 	}
 }
