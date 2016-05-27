@@ -394,7 +394,11 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	cr.MoveTo(1., 14.)
 	cr.SetSourceRGB(0., 0., 0.)
 	cr.SetFontSize(12.)
-	cr.ShowText(fmt.Sprintf("steps:%d cells:%d old:%d", pg.iterations, olds+news, olds))
+	total := float64(pg.cellsPerRow * len(pg.area))
+	cr.ShowText(fmt.Sprintf("steps:%d cells:%d/%.1f%%  old:%d/%.1f%%",
+		pg.iterations, olds+news, olds,
+		float64(olds+news)*100/total,
+		float64(olds)*100/total))
 	cr.Stroke()
 	if pg.repeats != 0 {
 		pg.StepAndDraw()
