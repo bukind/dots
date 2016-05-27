@@ -7,6 +7,7 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 	"os"
+	"runtime/pprof"
 )
 
 var fullscreen bool = false
@@ -50,7 +51,7 @@ type Playground struct {
 	cellSize       uint
 	gapSize        uint
 	area           [][]uint64
-	cellTypes      map[uint64]*cellType
+	cellTypes      []*cellType
 	cellsPerRow    int
 	lastIntMask    uint64
 	lastCellOffset uint
@@ -221,7 +222,7 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 	}
 
 	// define cell types
-	pg.cellTypes = make(map[uint64]*cellType)
+	pg.cellTypes = make([]*cellType, cellMask+1)
 	pg.cellTypes[0x0] = makeCellType("white")
 	pg.cellTypes[0x1] = makeCellType("lightgreen")
 	pg.cellTypes[0x4] = makeCellType("blue")
@@ -231,10 +232,10 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 		p0 := pattern0
 		p1 := pattern1
 		for i := 0; i < cellsPerInt; i++ {
-			if _, ok := pg.cellTypes[p0&cellMask]; !ok {
+			if pg.cellTypes[p0&cellMask] == nil {
 				panic("Bad pattern")
 			}
-			if _, ok := pg.cellTypes[p1&cellMask]; !ok {
+			if pg.cellTypes[p1&cellMask] == nil {
 				panic("Bad pattern")
 			}
 			p0 >>= bitsPerCell
@@ -354,13 +355,15 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	if pg.area == nil {
 		areaSetup(da, nil, pg)
 	}
-	// fmt.Printf("draw totx:%d\n", pg.cellsPerRow)
 	dx := float64(pg.cellSize + pg.gapSize)
 	cs := float64(pg.cellSize)
 	for iy, row := range pg.area {
-		// fmt.Printf("row #%d nx:%d, ct:%d\n", iy, len(row), len(pg.cellTypes))
 		y := float64(iy) * dx
 		for mask, cellType := range pg.cellTypes {
+			if mask == 0 || cellType == nil {
+				// optimization - skip empty cells
+				continue
+			}
 			rgba := cellType.color.Floats()
 			cr.SetSourceRGB(rgba[0], rgba[1], rgba[2])
 			for ix, value := range row {
@@ -370,9 +373,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 					maxIdx = pg.cellsPerRow
 				}
 				for idx := idx0; idx < maxIdx; idx++ {
-					if value&cellMask == mask {
-						// fmt.Printf("x:%d, y:%d, rgb:%.1f/%.1f/%.1f\n", idx, iy,
-						//           rgba[0], rgba[1], rgba[2])
+					if int(value&cellMask) == mask {
 						cr.Rectangle(dx*float64(idx), y, cs, cs)
 					}
 					value >>= bitsPerCell
@@ -503,6 +504,7 @@ func main() {
 
 	var cellSize uint = 12
 	var gapSize uint = 4
+	var prof string
 
 	flag.Uint64Var(&pattern0, "pattern0", pattern0, "Set the initial pattern #0")
 	flag.Uint64Var(&pattern1, "pattern1", pattern1, "Set the initial pattern #1")
@@ -511,6 +513,7 @@ func main() {
 	flag.UintVar(&cellSize, "cellsize", cellSize, "The size of the cell")
 	flag.UintVar(&gapSize, "gapsize", gapSize, "The size of the gap")
 	flag.StringVar(&initialConfig, "init", initialConfig, "The name of the initial configuration")
+	flag.StringVar(&prof, "prof", "", "The name of the cpu profile output")
 
 	flag.Parse()
 
@@ -524,6 +527,14 @@ func main() {
 
 	if err := setupWindow(playground); err != nil {
 		fail(err)
+	}
+	if prof != "" {
+		f, err := os.Create(prof)
+		if err != nil {
+			fail(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 	gtk.Main()
 }
