@@ -37,11 +37,11 @@ func fail(err error) {
 }
 
 type cellType struct {
-	color    *gdk.RGBA
+	color *gdk.RGBA
 }
 
 type cellValue struct {
-  young uint64
+	young uint64
 	total uint64
 }
 
@@ -76,43 +76,42 @@ func NewPlayground(cellSize, gapSize uint) *Playground {
 //     >> 01 01 01 01 next+
 //  01 01 01 01 << next-
 
-
 func cellSplit(x uint64) cellValue {
 	const lowMask uint64 = 0x3333333333333333
 	y := x & lowMask
-  return cellValue{y, (x >> 2) & lowMask + y}
+	return cellValue{y, (x>>2)&lowMask + y}
 }
 
 // Makes a running sum of the row.
 // young, total
 func tripleRow(orig []uint64, lco uint, lim uint64) []cellValue {
 	nint := len(orig)
-  result := make([]cellValue, nint)
+	result := make([]cellValue, nint)
 	mask := cellMask
 	ls := uint(bitsPerCell)
 	rs := uint(64 - bitsPerCell)
 	for i := 1; i < nint-1; i++ {
-	  o := orig[i]
+		o := orig[i]
 		a := orig[i-1]
 		b := orig[i+1]
 		x := o + (o >> ls) + (b << rs) + (o << ls) + (a >> rs)
 		result[i] = cellSplit(x)
 	}
 	if nint > 1 {
-	  o := orig[0]
+		o := orig[0]
 		a := orig[nint-1]
 		b := orig[1]
-		x := o + (o >> ls) + (b << rs) + (o << ls) + ((a>>lco) & mask)
+		x := o + (o >> ls) + (b << rs) + (o << ls) + ((a >> lco) & mask)
 		result[0] = cellSplit(x)
 		o = orig[nint-1]
 		a = orig[nint-2]
 		b = orig[0]
-		x = o + (o >> ls) + ((b&mask) << lco) + (o << ls) + (a >> rs)
+		x = o + (o >> ls) + ((b & mask) << lco) + (o << ls) + (a >> rs)
 		x &= lim
 		result[nint-1] = cellSplit(x)
-  } else {
-	  o := orig[0]
-		x := o + (o >> ls) + ((o&mask) << lco) + (o << ls) + ((o>>lco) & mask)
+	} else {
+		o := orig[0]
+		x := o + (o >> ls) + ((o & mask) << lco) + (o << ls) + ((o >> lco) & mask)
 		x &= lim
 		result[0] = cellSplit(x)
 	}
@@ -124,10 +123,15 @@ func tripleRow(orig []uint64, lco uint, lim uint64) []cellValue {
 // Thus we can reuse the running sums of the rows.
 //
 func sumup8(arg [][]cellValue, orig []uint64) []cellValue {
-  nint := len(orig)
-  res := make([]cellValue, nint)
+	nint := len(orig)
+	res := make([]cellValue, nint)
+	a := arg[0]
+	b := arg[1]
+	c := arg[2]
 	for i := 0; i < nint; i++ {
-    res[i] = arg[0][i] + arg[1][i] + arg[2][i] - cellSplit(orig[i])
+		v := cellSplit(orig[i])
+		res[i].young = a[i].young + b[i].young + c[i].young - v.young
+		res[i].total = a[i].total + b[i].total + c[i].total - v.total
 	}
 	return res
 }
@@ -136,21 +140,21 @@ func (pg *Playground) Step() {
 	// fmt.Printf("step %p\n", pg)
 	nrows := len(pg.area)
 	next := make([][]uint64, nrows) // the next state of the area
-	roll := make([][]cellValue, 3)     // working area
+	roll := make([][]cellValue, 3)  // working area
 	first := tripleRow(pg.area[0], pg.lastCellOffset, pg.lastIntMask)
 	last := tripleRow(pg.area[nrows-1], pg.lastCellOffset, pg.lastIntMask)
-	copy(roll[1], last)
-	copy(roll[2], first)
+	roll[1] = last
+	roll[2] = first
 	for iy := 0; iy < nrows; iy++ {
 		// shift all rows
-		copy(roll[0], roll[1])
-		copy(roll[1], roll[2])
+		roll[0] = roll[1]
+		roll[1] = roll[2]
 		// fill the next row
 		idx := iy + 1
 		if idx < nrows {
-			copy(roll[2], tripleRow(pg.area[idx], pg.lastCellOffset, pg.lastIntMask))
+			roll[2] = tripleRow(pg.area[idx], pg.lastCellOffset, pg.lastIntMask)
 		} else {
-			copy(roll[2], first)
+			roll[2] = first
 		}
 		// now sumup all young and total number of adjacent cells.
 		// counts is an array of number of Y (young) and T(total) cells around.
@@ -179,14 +183,14 @@ func (pg *Playground) Step() {
 			new1 := (orig & ones) << 2
 
 			// extract all empty cells
-			empt := noto  & (noto >> 2)
+			empt := noto & (noto >> 2)
 			// convert them into youngs
-			new2 := yless2 & total & total23 & ones
+			new2 := empt & yless2 & total & total23 & ones
 
 			// extract all old cells
 			olds := orig >> 2
 			// convert them into old
-			new3 := (yless2 & total23 & olds & ones) << 2
+			new3 := (olds & yless2 & total23 & ones) << 2
 
 			// now combine all three outcomes
 			next[iy][ix] = new1 | new2 | new3
@@ -198,12 +202,12 @@ func (pg *Playground) Step() {
 }
 
 func makeCellType(colorName string) *cellType {
-    ct := new(cellType)
-		ct.color = gdk.NewRGBA()
-		if !ct.color.Parse(colorName) {
-			panic("failed to parse color name")
-		}
-		return ct
+	ct := new(cellType)
+	ct.color = gdk.NewRGBA()
+	if !ct.color.Parse(colorName) {
+		panic("failed to parse color name")
+	}
+	return ct
 }
 
 func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
@@ -228,7 +232,7 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 		p1 := pattern1
 		for i := 0; i < cellsPerInt; i++ {
 			if _, ok := pg.cellTypes[p0&cellMask]; !ok {
-			  panic("Bad pattern")
+				panic("Bad pattern")
 			}
 			if _, ok := pg.cellTypes[p1&cellMask]; !ok {
 				panic("Bad pattern")
@@ -301,11 +305,11 @@ func (pg *Playground) setDots(y, x int, dots string) {
 		case '0':
 			v = 0
 		case '1':
-			v = 1
+			v = 0x1
 		case '2':
-			v = 2
+			v = 0x4
 		}
-		nv := pg.area[y][ix] & ^(cellMask<<shift) + ((1 << shift) * v)
+		nv := pg.area[y][ix] & ^(cellMask<<shift) + (v << shift)
 		pg.area[y][ix] = nv
 		x++
 	}
