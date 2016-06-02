@@ -56,11 +56,15 @@ type Playground struct {
 	lastCellOffset uint
 	repeats        int    // how many times to repeat
 	iterations     uint64 // the number of steps passed
+	viewX0         int    // the index of the top-left cell
+	viewY0         int
 }
 
 func NewPlayground(cellSize uint) *Playground {
 	pg := new(Playground)
 	pg.cellSize = cellSize
+	pg.viewX0 = 0
+	pg.viewY0 = 0
 	return pg
 }
 
@@ -363,7 +367,36 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	cs := float64(pg.cellSize - gapSize)
 	olds := 0
 	news := 0
-	for iy, row := range pg.area {
+	// calculate the viewport parameters
+	cellsX := da.GetAllocatedWidth() / int(pg.cellSize)
+	cellsY := da.GetAllocatedHeight() / int(pg.cellSize)
+	startY := pg.viewY0
+	startX := pg.viewX0
+	endY := startY + cellsY
+	endX := startX + cellsX
+	if endY > len(pg.area) {
+		if cellsY > len(pg.area) {
+			startY = 0
+		} else {
+			startY = len(pg.area) - cellsY
+		}
+		endY = len(pg.area)
+	}
+	if startX+cellsX > pg.cellsPerRow {
+		if cellsX > pg.cellsPerRow {
+			startX = 0
+		} else {
+			startX = pg.cellsPerRow - cellsX
+		}
+		endX = pg.cellsPerRow
+	}
+	// convert X cells into ints
+	cellX0 := startX
+	startX = startX / cellsPerInt
+	endX = (endX + cellsPerInt - 1) / cellsPerInt
+
+	for iy := startY; iy < endY; iy++ {
+		row := pg.area[iy]
 		y := float64(iy) * dx
 		for mask, cellType := range pg.cellTypes {
 			if mask == 0 || cellType == nil {
@@ -376,7 +409,8 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 			}
 			rgba := cellType.color.Floats()
 			cr.SetSourceRGBA(rgba[0], rgba[1], rgba[2], rgba[3])
-			for ix, value := range row {
+			for ix := startX; ix < endX; ix++ {
+				value := row[ix]
 				idx0 := ix * cellsPerInt
 				maxIdx := idx0 + cellsPerInt
 				if maxIdx > pg.cellsPerRow {
@@ -384,7 +418,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 				}
 				for idx := idx0; idx < maxIdx; idx++ {
 					if int(value&cellMask) == mask {
-						cr.Rectangle(dx*float64(idx), y, cs, cs)
+						cr.Rectangle(dx*float64(idx-cellX0), y, cs, cs)
 						(*cnt)++
 					}
 					value >>= bitsPerCell
