@@ -49,7 +49,6 @@ type cellValue struct {
 type Playground struct {
 	da             *gtk.DrawingArea
 	cellSize       uint
-	gapSize        uint
 	area           [][]uint64
 	cellTypes      []*cellType
 	cellsPerRow    int
@@ -59,10 +58,9 @@ type Playground struct {
 	iterations     uint64 // the number of steps passed
 }
 
-func NewPlayground(cellSize, gapSize uint) *Playground {
+func NewPlayground(cellSize uint) *Playground {
 	pg := new(Playground)
 	pg.cellSize = cellSize
-	pg.gapSize = gapSize
 	return pg
 }
 
@@ -347,8 +345,8 @@ func (pg *Playground) ShowAll() {
 
 func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
-	nx := da.GetAllocatedWidth() / int(pg.cellSize+pg.gapSize)
-	ny := da.GetAllocatedHeight() / int(pg.cellSize+pg.gapSize)
+	nx := da.GetAllocatedWidth() / int(pg.cellSize)
+	ny := da.GetAllocatedHeight() / int(pg.cellSize)
 	pg.Init(da, nx, ny)
 }
 
@@ -357,8 +355,12 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	if pg.area == nil {
 		areaSetup(da, nil, pg)
 	}
-	dx := float64(pg.cellSize + pg.gapSize)
-	cs := float64(pg.cellSize)
+	var gapSize uint = 0
+	if pg.cellSize > 3 {
+		gapSize = pg.cellSize / 4
+	}
+	dx := float64(pg.cellSize)
+	cs := float64(pg.cellSize - gapSize)
 	olds := 0
 	news := 0
 	for iy, row := range pg.area {
@@ -462,7 +464,7 @@ func showbin(v uint64) string {
 
 func mouseClicked(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
 	ev := gdk.EventButton{evt}
-	dx := float64(pg.cellSize + pg.gapSize)
+	dx := float64(pg.cellSize)
 	ix := int(ev.X() / dx)
 	iy := int(ev.Y() / dx)
 	idx := ix / cellsPerInt
@@ -530,7 +532,6 @@ func setupWindow(playground *Playground) error {
 func main() {
 
 	var cellSize uint = 12
-	var gapSize uint = 4
 	var prof string
 
 	flag.Uint64Var(&pattern0, "pattern0", pattern0, "Set the initial pattern #0")
@@ -538,7 +539,6 @@ func main() {
 	flag.IntVar(&xsize, "xsize", xsize, "Set the X size, or -1")
 	flag.IntVar(&ysize, "ysize", ysize, "Set the Y size, or -1")
 	flag.UintVar(&cellSize, "cellsize", cellSize, "The size of the cell")
-	flag.UintVar(&gapSize, "gapsize", gapSize, "The size of the gap")
 	flag.StringVar(&initialConfig, "init", initialConfig, "The name of the initial configuration")
 	flag.StringVar(&prof, "prof", "", "The name of the cpu profile output")
 
@@ -550,7 +550,7 @@ func main() {
 
 	gtk.Init(nil)
 
-	playground := NewPlayground(cellSize, gapSize)
+	playground := NewPlayground(cellSize)
 
 	if err := setupWindow(playground); err != nil {
 		fail(err)
