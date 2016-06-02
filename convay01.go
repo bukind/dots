@@ -417,6 +417,16 @@ func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 	case gdk.KEY_C:
 		pg.Clean()
 		pg.da.QueueDraw()
+	case gdk.KEY_S:
+		{
+			// clean the lower half of the field
+			nint := len(pg.area)
+			for iy := nint / 2; iy < nint; iy++ {
+				for ix := 0; ix < len(pg.area[iy]); ix++ {
+					pg.area[iy][ix] = 0
+				}
+			}
+		}
 	case gdk.KEY_t:
 		pg.repeats += 10
 		pg.StepAndDraw()
