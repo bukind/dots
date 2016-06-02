@@ -347,17 +347,17 @@ func (pg *Playground) ShowAll() {
 	}
 }
 
-func areaSetup(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
+func areaSetupEvent(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
 	_ = ev
 	nx := da.GetAllocatedWidth() / int(pg.cellSize)
 	ny := da.GetAllocatedHeight() / int(pg.cellSize)
 	pg.Init(da, nx, ny)
 }
 
-func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
+func areaDrawEvent(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	_ = cr
 	if pg.area == nil {
-		areaSetup(da, nil, pg)
+		areaSetupEvent(da, nil, pg)
 	}
 	var gapSize uint = 0
 	if pg.cellSize > 3 {
@@ -392,12 +392,13 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	}
 	// convert X cells into ints
 	cellX0 := startX
+	cellY0 := startY
 	startX = startX / cellsPerInt
 	endX = (endX + cellsPerInt - 1) / cellsPerInt
 
 	for iy := startY; iy < endY; iy++ {
 		row := pg.area[iy]
-		y := float64(iy) * dx
+		y := float64(iy-cellY0) * dx
 		for mask, cellType := range pg.cellTypes {
 			if mask == 0 || cellType == nil {
 				// optimization - skip empty cells
@@ -440,7 +441,7 @@ func areaDraw(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	}
 }
 
-func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
+func keyPressEvent(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 	_ = win
 	ev := gdk.EventKey{evt}
 	fmt.Printf("key: val:%d state:%d type:%v\n", ev.KeyVal(), ev.State(), ev.Type())
@@ -474,6 +475,67 @@ func winKeyPress(win *gtk.Window, evt *gdk.Event, pg *Playground) {
 	}
 }
 
+func mouseScrollEvent(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
+	ev := gdk.EventScroll{evt}
+	dy := ev.DeltaY()
+	var newcs = pg.cellSize
+	if dy < 0 {
+		// zoom in
+		if newcs < 4 {
+			newcs += 1
+		} else if newcs < 10 {
+			newcs += 2
+		} else if newcs < 30 {
+			newcs = uint(1.4 * float64(newcs))
+		} else {
+			// too large cell - not zooming
+		}
+	} else if dy > 0 {
+		// zoom out
+		if newcs > 10 {
+			newcs = uint(float64(newcs) / 1.4)
+			if newcs > 10 {
+				newcs = 10
+			}
+		} else if newcs > 4 {
+			newcs -= 2
+		} else if newcs > 1 {
+			newcs -= 1
+		} else {
+			// too small cell - not zooming
+		}
+	}
+	if newcs == pg.cellSize {
+		return true
+	}
+
+	// old cell index under the cursor
+	oldX := float64(pg.viewX0) + ev.X()/float64(pg.cellSize)
+	oldY := float64(pg.viewY0) + ev.Y()/float64(pg.cellSize)
+	// find the 0 position so that the same cell is under the cursor
+	newX0 := int(oldX - (ev.X() / float64(newcs)))
+	newY0 := int(oldY - (ev.Y() / float64(newcs)))
+	if newX0 < 0 {
+		newX0 = 0
+	} else if newX0 >= pg.cellsPerRow {
+		newX0 = pg.cellsPerRow - 1
+	}
+	if newY0 < 0 {
+		newY0 = 0
+	} else if newY0 >= len(pg.area) {
+		newY0 = len(pg.area) - 1
+	}
+
+	fmt.Printf("scroll: dy:%.1f, (x,y):%.1f,%.1f v0:%d,%d -> %d,%d\n",
+		dy, ev.X(), ev.Y(), pg.viewX0, pg.viewY0, newX0, newY0)
+
+	pg.viewX0 = newX0
+	pg.viewY0 = newY0
+	pg.cellSize = newcs
+	pg.da.QueueDraw()
+	return true
+}
+
 func showbin(v uint64) string {
 	var r []byte
 	for i := 0; i < cellsPerInt; i++ {
@@ -496,7 +558,7 @@ func showbin(v uint64) string {
 	return string(r)
 }
 
-func mouseClicked(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
+func mouseClickedEvent(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
 	ev := gdk.EventButton{evt}
 	dx := float64(pg.cellSize)
 	ix := int(ev.X() / dx)
@@ -541,22 +603,28 @@ func setupWindow(playground *Playground) error {
 		return err
 	}
 
+	da.AddEvents(int(gdk.SCROLL_MASK))
+
 	win.Add(da)
 	win.ShowAll()
 
-	if _, err = da.Connect("configure-event", areaSetup, playground); err != nil {
+	if _, err = da.Connect("configure-event", areaSetupEvent, playground); err != nil {
 		return err
 	}
 
-	if _, err = da.Connect("draw", areaDraw, playground); err != nil {
+	if _, err = da.Connect("draw", areaDrawEvent, playground); err != nil {
 		return err
 	}
 
-	if _, err = win.Connect("key-press-event", winKeyPress, playground); err != nil {
+	if _, err = win.Connect("key-press-event", keyPressEvent, playground); err != nil {
 		return err
 	}
 
-	if _, err = win.Connect("button-press-event", mouseClicked, playground); err != nil {
+	if _, err = win.Connect("button-press-event", mouseClickedEvent, playground); err != nil {
+		return err
+	}
+
+	if _, err = win.Connect("scroll-event", mouseScrollEvent, playground); err != nil {
 		return err
 	}
 
