@@ -10,7 +10,6 @@ import (
 	"runtime/pprof"
 )
 
-var fullscreen bool = false
 var initialConfig = ""
 
 const lowBits64 uint64 = 0x5555555555555555
@@ -54,13 +53,17 @@ type Playground struct {
 	iterations     uint64 // the number of steps passed
 	viewX0         int    // the index of the top-left cell
 	viewY0         int
+	viewXSize      int    // the width of the view
+	viewYSize      int
 }
 
-func NewPlayground(cellSize uint) *Playground {
+func NewPlayground(cellSize uint, xsize, ysize int) *Playground {
 	pg := new(Playground)
 	pg.cellSize = cellSize
 	pg.viewX0 = 0
 	pg.viewY0 = 0
+	pg.viewXSize = xsize
+	pg.viewYSize = ysize
 	return pg
 }
 
@@ -211,7 +214,7 @@ func makeCellType(colorName string) *cellType {
 	return ct
 }
 
-func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
+func (pg *Playground) Init(nx, ny int) {
 	fmt.Println("configure-event")
 
 	if nx <= 0 {
@@ -228,7 +231,6 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 	pg.cellTypes[0x4] = makeCellType("blue")
 
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
-	pg.da = da
 	pg.cellsPerRow = nx
 	lastIntCells := nx - cellsPerInt*(rowLen-1)
 	if lastIntCells <= 0 {
@@ -317,18 +319,8 @@ func (pg *Playground) ShowAll() {
 	}
 }
 
-func areaSetupEvent(da *gtk.DrawingArea, ev *gdk.Event, pg *Playground) {
-	_ = ev
-	nx := da.GetAllocatedWidth() / int(pg.cellSize)
-	ny := da.GetAllocatedHeight() / int(pg.cellSize)
-	pg.Init(da, nx, ny)
-}
-
 func areaDrawEvent(da *gtk.DrawingArea, cr *cairo.Context, pg *Playground) {
 	_ = cr
-	if pg.area == nil {
-		areaSetupEvent(da, nil, pg)
-	}
 	var gapSize uint = 0
 	if pg.cellSize > 3 {
 		gapSize = pg.cellSize / 4
@@ -561,10 +553,11 @@ func setupWindow(playground *Playground) error {
 
 	win.SetTitle("dots")
 	win.Connect("destroy", gtk.MainQuit)
-	if fullscreen {
+	if playground.viewXSize <= 0 || playground.viewYSize <= 0 {
+	  // fullscreen
 		win.Fullscreen()
 	} else {
-		win.SetSizeRequest(xsize, ysize)
+		win.SetSizeRequest(playground.viewXSize, playground.viewYSize)
 	}
 	win.SetResizable(false)
 
@@ -573,14 +566,13 @@ func setupWindow(playground *Playground) error {
 		return err
 	}
 
+	// link playground and drawing area
+	playground.da = da
+
 	da.AddEvents(int(gdk.SCROLL_MASK))
 
 	win.Add(da)
 	win.ShowAll()
-
-	if _, err = da.Connect("configure-event", areaSetupEvent, playground); err != nil {
-		return err
-	}
 
 	if _, err = da.Connect("draw", areaDrawEvent, playground); err != nil {
 		return err
@@ -607,22 +599,23 @@ func main() {
 	var prof string
 	var xsize int
 	var ysize int
+	var nx int
+	var ny int
 
-	flag.IntVar(&xsize, "xsize", 400, "Set the X size, or -1")
-	flag.IntVar(&ysize, "ysize", 400, "Set the Y size, or -1")
+	flag.IntVar(&xsize, "xsize", 400, "Set the X viewport size, or -1")
+	flag.IntVar(&ysize, "ysize", 400, "Set the Y viewport size, or -1")
+	flag.IntVar(&nx, "nx", 40, "Set the number of cells per X")
+	flag.IntVar(&ny, "ny", 40, "Set the number of cells per Y")
 	flag.UintVar(&cellSize, "cellsize", cellSize, "The size of the cell")
 	flag.StringVar(&initialConfig, "init", initialConfig, "The name of the initial configuration")
 	flag.StringVar(&prof, "prof", "", "The name of the cpu profile output")
 
 	flag.Parse()
 
-	if xsize == -1 || ysize == -1 {
-		fullscreen = true
-	}
-
 	gtk.Init(nil)
 
-	playground := NewPlayground(cellSize)
+	playground := NewPlayground(cellSize, xsize, ysize)
+	playground.Init(nx, ny)
 
 	if err := setupWindow(playground); err != nil {
 		fail(err)
