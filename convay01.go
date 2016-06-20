@@ -53,7 +53,7 @@ type Playground struct {
 	iterations     uint64 // the number of steps passed
 	viewX0         int    // the index of the top-left cell
 	viewY0         int
-	viewXSize      int // the width of the view
+	viewXSize      int    // the width of the view
 	viewYSize      int
 }
 
@@ -86,7 +86,7 @@ func cellSplit(x uint64) cellValue {
 }
 
 // Makes a running sum of the row.
-// young, total
+// Result is the array of (young,total)
 func tripleRow(orig []uint64, lco uint, lim uint64) []cellValue {
 	nint := len(orig)
 	result := make([]cellValue, nint)
@@ -554,7 +554,7 @@ func setupWindow(playground *Playground) error {
 	win.SetTitle("dots")
 	win.Connect("destroy", gtk.MainQuit)
 	if playground.viewXSize <= 0 || playground.viewYSize <= 0 {
-		// fullscreen
+	  // fullscreen
 		win.Fullscreen()
 	} else {
 		win.SetSizeRequest(playground.viewXSize, playground.viewYSize)
