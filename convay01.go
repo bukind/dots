@@ -11,10 +11,6 @@ import (
 )
 
 var fullscreen bool = false
-var xsize int = 400
-var ysize int = 400
-var pattern0 uint64 = 0x0
-var pattern1 uint64 = 0x0
 var initialConfig = ""
 
 const lowBits64 uint64 = 0x5555555555555555
@@ -231,22 +227,6 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 	pg.cellTypes[0x1] = makeCellType("lightgreen")
 	pg.cellTypes[0x4] = makeCellType("blue")
 
-	if initialConfig == "" {
-		// check pattern0, pattern1
-		p0 := pattern0
-		p1 := pattern1
-		for i := 0; i < cellsPerInt; i++ {
-			if pg.cellTypes[p0&cellMask] == nil {
-				panic("Bad pattern")
-			}
-			if pg.cellTypes[p1&cellMask] == nil {
-				panic("Bad pattern")
-			}
-			p0 >>= bitsPerCell
-			p1 >>= bitsPerCell
-		}
-	}
-
 	rowLen := (nx + cellsPerInt - 1) / cellsPerInt
 	pg.da = da
 	pg.cellsPerRow = nx
@@ -260,16 +240,6 @@ func (pg *Playground) Init(da *gtk.DrawingArea, nx, ny int) {
 	pg.lastCellOffset = uint((lastIntCells - 1) * bitsPerCell)
 	for i := 0; i < ny; i++ {
 		row := make([]uint64, rowLen)
-		if initialConfig == "" {
-			pattern := pattern0
-			if i%2 == 1 {
-				pattern = pattern1
-			}
-			for j := 0; j < rowLen; j++ {
-				row[j] = pattern
-			}
-			row[rowLen-1] &= pg.lastIntMask
-		}
 		pg.area = append(pg.area, row)
 	}
 	pg.repeats = 0
@@ -635,11 +605,11 @@ func main() {
 
 	var cellSize uint = 12
 	var prof string
+	var xsize int
+	var ysize int
 
-	flag.Uint64Var(&pattern0, "pattern0", pattern0, "Set the initial pattern #0")
-	flag.Uint64Var(&pattern1, "pattern1", pattern1, "Set the initial pattern #1")
-	flag.IntVar(&xsize, "xsize", xsize, "Set the X size, or -1")
-	flag.IntVar(&ysize, "ysize", ysize, "Set the Y size, or -1")
+	flag.IntVar(&xsize, "xsize", 400, "Set the X size, or -1")
+	flag.IntVar(&ysize, "ysize", 400, "Set the Y size, or -1")
 	flag.UintVar(&cellSize, "cellsize", cellSize, "The size of the cell")
 	flag.StringVar(&initialConfig, "init", initialConfig, "The name of the initial configuration")
 	flag.StringVar(&prof, "prof", "", "The name of the cpu profile output")
