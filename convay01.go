@@ -53,7 +53,7 @@ type Playground struct {
 	iterations     uint64 // the number of steps passed
 	viewX0         int    // the index of the top-left cell
 	viewY0         int
-	viewXSize      int    // the width of the view
+	viewXSize      int // the width of the view
 	viewYSize      int
 }
 
@@ -554,7 +554,7 @@ func setupWindow(playground *Playground) error {
 	win.SetTitle("dots")
 	win.Connect("destroy", gtk.MainQuit)
 	if playground.viewXSize <= 0 || playground.viewYSize <= 0 {
-	  // fullscreen
+		// fullscreen
 		win.Fullscreen()
 	} else {
 		win.SetSizeRequest(playground.viewXSize, playground.viewYSize)
