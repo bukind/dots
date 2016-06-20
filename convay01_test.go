@@ -59,42 +59,38 @@ func ExpectUint64(t *testing.T, s string, a, b uint64) {
 
 func TestPlaygroundInit7x5(t *testing.T) {
 	var cellSize uint = 7
-	var gapSize uint = 1
-	pg := NewPlayground(cellSize, gapSize)
+	pg := NewPlayground(cellSize, 14, 14)
 	if pg == nil {
 		t.Fatal("cannot make a new playground")
 	}
 	ExpectUint(t, "pg.cellSize", pg.cellSize, cellSize)
-	ExpectUint(t, "pg.gapSize", pg.gapSize, gapSize)
 
 	nx := 7
 	ny := 5
-	pg.Init(nil, nx, ny)
+	pg.Init(nx, ny)
 	ExpectInt(t, "len(pg.area)", len(pg.area), ny)
 	ExpectInt(t, "pg.cellsPerRow", pg.cellsPerRow, nx)
 	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 1)
-	ExpectInt(t, "len(pg.cellTypes)", len(pg.cellTypes), 3)
+	ExpectInt(t, "len(pg.cellTypes)", len(pg.cellTypes), 16)
 	ExpectUint64(t, "pg.lastIntMask", pg.lastIntMask, 0xfffffff)
 	ExpectUint(t, "pg.lastCellOffset", pg.lastCellOffset, 24)
 }
 
 func TestPlaygroundInit800x5(t *testing.T) {
 	var cellSize uint = 7
-	var gapSize uint = 1
-	pg := NewPlayground(cellSize, gapSize)
+	pg := NewPlayground(cellSize, 28, 28)
 	if pg == nil {
 		t.Fatal("cannot make a new playground")
 	}
 	ExpectUint(t, "pg.cellSize", pg.cellSize, cellSize)
-	ExpectUint(t, "pg.gapSize", pg.gapSize, gapSize)
 
 	nx := 800
 	ny := 5
-	pg.Init(nil, nx, ny)
+	pg.Init(nx, ny)
 	ExpectInt(t, "len(pg.area)", len(pg.area), ny)
 	ExpectInt(t, "pg.cellsPerRow", pg.cellsPerRow, nx)
 	ExpectInt(t, "len(pg.area[0])", len(pg.area[0]), 50) // 800/16
-	ExpectInt(t, "len(pg.cellTypes)", len(pg.cellTypes), 3)
+	ExpectInt(t, "len(pg.cellTypes)", len(pg.cellTypes), 16)
 	ExpectUint64(t, "pg.lastIntMask", pg.lastIntMask, allset)
 	ExpectUint(t, "pg.lastCellOffset", pg.lastCellOffset, 60)
 }
