@@ -615,6 +615,7 @@ func main() {
 	gtk.Init(nil)
 
 	playground := NewPlayground(cellSize, xsize, ysize)
+	// TODO: should be merged into constructor
 	playground.Init(nx, ny)
 
 	if err := setupWindow(playground); err != nil {
