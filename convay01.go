@@ -527,15 +527,25 @@ func mouseClickedEvent(win *gtk.Window, evt *gdk.Event, pg *Playground) bool {
 	iy := int(ev.Y() / dx)
 	idx := ix / cellsPerInt
 	v := pg.area[iy][idx]
-	mask := cellMask << uint(bitsPerCell*(ix%cellsPerInt))
-	v0 := ^v & mask
-	nv := (((v0 & (v0 >> 1)) | (v&mask)<<1) & mask) | (v & ^mask)
+	shift := uint(bitsPerCell * (ix % cellsPerInt))
+	var nv uint64
+	switch (v >> shift) & cellMask {
+	case 0x0:
+		nv = 0x1
+	case 0x1:
+		nv = 0x4
+	case 0x4:
+		nv = 0x0
+	default:
+		nv = 0x0
+	}
+	nv <<= shift
+	nv += v & ^(cellMask << shift)
 	fmt.Printf("mouse: btn:%d bnt-val:%d state:%d type:%v ix,iy,idx,i:%d,%d,%d,%d\n",
 		ev.Button(), ev.ButtonVal(),
 		ev.State(), ev.Type(),
 		ix, iy, idx, ix%cellsPerInt)
 	fmt.Printf("old: %s\n", showbin(v))
-	fmt.Printf("msk: %s\n", showbin(mask))
 	fmt.Printf("new: %s\n", showbin(nv))
 	pg.area[iy][idx] = nv
 	pg.da.QueueDraw()
